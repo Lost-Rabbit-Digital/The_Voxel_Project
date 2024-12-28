@@ -104,6 +104,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## Acknowledgments
 
 - Inspired by The Elder Scrolls II: Daggerfall
+- Older project Voxel Engine Alpaca: https://github.com/Lost-Rabbit-Digital/VoxelEngineAlpaca
 - Built with Godot Engine
 - Community contributions and feedback
 
