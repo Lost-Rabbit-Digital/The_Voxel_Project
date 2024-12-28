@@ -43,7 +43,8 @@ var chunk_node: Node3D
 
 # Noise settings
 @export_group("Noise Settings")
-@export var noise_seed: int = 1234
+@export var use_random_seed: bool = true  # Toggle for random generation
+@export var noise_seed: int = 1234  # Used only if use_random_seed is false
 @export var noise_frequency: float = 0.05
 @export var noise_octaves: int = 4
 @export var surface_level: float = 0.0  # Threshold for surface generation
@@ -61,7 +62,14 @@ func _ready() -> void:
 func _setup_noise() -> void:
 	noise = FastNoiseLite.new()
 	noise.noise_type = FastNoiseLite.TYPE_SIMPLEX
-	noise.seed = noise_seed
+	# Set random seed if enabled, otherwise use specified seed
+	if use_random_seed:
+		randomize()  # Randomize the global seed
+		noise.seed = randi()  # Generate random seed for noise
+		if debug_enabled:
+			print("VoxelManager: Using random seed: ", noise.seed)
+	else:
+		noise.seed = noise_seed
 	noise.frequency = noise_frequency
 	noise.fractal_octaves = noise_octaves
 	noise.fractal_lacunarity = 2.0
