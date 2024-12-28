@@ -1,4 +1,4 @@
-[gd_scene load_steps=8 format=3 uid="uid://yrxglwcwsqfy"]
+[gd_scene load_steps=7 format=3 uid="uid://yrxglwcwsqfy"]
 
 [ext_resource type="Script" uid="uid://bwnqknka1yyjj" path="res://scripts/voxels/voxel_manager.gd" id="1_uwrxv"]
 [ext_resource type="Script" uid="uid://gyeamovgi5ef" path="res://scripts/interaction/editor_style_camera.gd" id="2_yqjtg"]
@@ -19,8 +19,6 @@ sky = SubResource("Sky_lbhrr")
 ambient_light_source = 3
 reflected_light_source = 2
 
-[sub_resource type="Compositor" id="Compositor_lbhrr"]
-
 [node name="Node3D" type="Node3D"]
 
 [node name="VoxelManager" type="Node3D" parent="."]
@@ -31,10 +29,11 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5, 5, 5)
 script = ExtResource("2_yqjtg")
 
 [node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
-transform = Transform3D(0.663522, 0.439724, -0.605295, 0, 0.809048, 0.587743, 0.748157, -0.38998, 0.536821, 0, 0, 0)
+transform = Transform3D(0.698678, -0.492456, 0.518977, 0, 0.725398, 0.688329, -0.715437, -0.48092, 0.50682, 0, 0, 0)
 shadow_enabled = true
+directional_shadow_mode = 0
 script = ExtResource("3_lnu2h")
+day_duration = 220.0
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="."]
 environment = SubResource("Environment_lnu2h")
-compositor = SubResource("Compositor_lbhrr")

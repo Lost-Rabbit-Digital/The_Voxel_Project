@@ -17,6 +17,14 @@ run/main_scene="uid://yrxglwcwsqfy"
 config/features=PackedStringArray("4.4", "GL Compatibility")
 config/icon="uid://ctw1ib7hlkhh3"
 
+[display]
+
+window/size/viewport_width=1280
+window/size/viewport_height=720
+window/stretch/mode="canvas_items"
+window/stretch/aspect="keep_height"
+window/stretch/scale_mode="integer"
+
 [rendering]
 
 renderer/rendering_method.mobile="forward_plus"
