@@ -13,7 +13,7 @@ config_version=5
 config/name="snc_project"
 run/main_scene="uid://yrxglwcwsqfy"
 config/features=PackedStringArray("4.4", "GL Compatibility")
-config/icon="res://icon.svg"
+config/icon="uid://ctw1ib7hlkhh3"
 
 [rendering]
 
