@@ -1,7 +1,13 @@
-[gd_scene load_steps=3 format=3 uid="uid://yrxglwcwsqfy"]
+[gd_scene load_steps=6 format=3 uid="uid://yrxglwcwsqfy"]
 
 [ext_resource type="Script" uid="uid://bwnqknka1yyjj" path="res://scripts/voxels/voxel_manager.gd" id="1_uwrxv"]
 [ext_resource type="Script" uid="uid://gyeamovgi5ef" path="res://scripts/interaction/editor_style_camera.gd" id="2_yqjtg"]
+[ext_resource type="Script" uid="uid://bxwarlct4yu0s" path="res://scripts/environment/daylight_cycle.gd" id="3_lnu2h"]
+
+[sub_resource type="Environment" id="Environment_lnu2h"]
+volumetric_fog_enabled = true
+
+[sub_resource type="Compositor" id="Compositor_lbhrr"]
 
 [node name="Node3D" type="Node3D"]
 
@@ -15,3 +21,8 @@ script = ExtResource("2_yqjtg")
 [node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
 transform = Transform3D(0.663522, 0.439724, -0.605295, 0, 0.809048, 0.587743, 0.748157, -0.38998, 0.536821, 0, 0, 0)
 shadow_enabled = true
+script = ExtResource("3_lnu2h")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_lnu2h")
+compositor = SubResource("Compositor_lbhrr")
