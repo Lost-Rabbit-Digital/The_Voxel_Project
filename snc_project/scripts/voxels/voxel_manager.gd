@@ -1,43 +1,118 @@
 # voxel_manager.gd
 # Manages voxel creation, updates, and rendering in the game world
-# Handles individual voxel operations and will be expanded for chunk management
+# Handles chunk-based terrain generation using Simplex noise
 
 extends Node3D
 
-# Constants for voxel properties
-const VOXEL_SIZE: float = 1.0  # Size of each voxel cube
-const MAX_VOXELS: int = 1000   # Safety limit for development
+# Constants for voxel and chunk properties
+const VOXEL_SIZE: float = 1.0     # Size of each voxel cube
+const CHUNK_SIZE: int = 16        # Size of chunk in voxels (16x16x16)
+const MAX_VOXELS: int = 16384     # Safety limit for development (16^3 = 4096)
 
 # Enums for voxel types (will be expanded as needed)
 enum VoxelType {
 	AIR,
 	DIRT,
 	STONE,
-	METAL
+	METAL,
+	GRASS
 }
 
-# Dictionary to store active voxels
+# Dictionary to store active voxels in the current chunk
 # Key: Vector3 position, Value: Dictionary with voxel data
 var active_voxels: Dictionary = {}
 
+# Noise generator for terrain
+var noise: FastNoiseLite
+
 # Resource preloading
 var voxel_materials: Dictionary = {
-	VoxelType.DIRT: preload_material(Color(0.6, 0.4, 0.2)),  # Brown
-	VoxelType.STONE: preload_material(Color(0.7, 0.7, 0.7)), # Gray
-	VoxelType.METAL: preload_material(Color(0.8, 0.8, 0.9))  # Light metallic
+	VoxelType.DIRT: preload_material(Color(0.6, 0.4, 0.2)),   # Brown
+	VoxelType.STONE: preload_material(Color(0.7, 0.7, 0.7)),  # Gray
+	VoxelType.METAL: preload_material(Color(0.8, 0.8, 0.9)),  # Light metallic
+	VoxelType.GRASS: preload_material(Color(0.3, 0.7, 0.3))   # Green
 }
+
+# Current chunk properties
+var current_chunk_position: Vector3 = Vector3.ZERO
+var chunk_node: Node3D
 
 # Debug settings
 @export var debug_enabled: bool = true
 @export var show_voxel_coords: bool = true
 
-# Called when the node enters the scene tree
+# Noise settings
+@export_group("Noise Settings")
+@export var noise_seed: int = 1234
+@export var noise_frequency: float = 0.05
+@export var noise_octaves: int = 4
+@export var surface_level: float = 0.0  # Threshold for surface generation
+
 func _ready() -> void:
 	if debug_enabled:
 		print("VoxelManager: Initializing...")
 	
-	# Create a test pattern of voxels
-	_create_test_pattern()
+	# Initialize noise generator
+	_setup_noise()
+	
+	# Create initial chunk
+	create_chunk(current_chunk_position)
+
+func _setup_noise() -> void:
+	noise = FastNoiseLite.new()
+	noise.noise_type = FastNoiseLite.TYPE_SIMPLEX
+	noise.seed = noise_seed
+	noise.frequency = noise_frequency
+	noise.fractal_octaves = noise_octaves
+	noise.fractal_lacunarity = 2.0
+	noise.fractal_gain = 0.5
+
+func create_chunk(chunk_pos: Vector3) -> void:
+	# Clear any existing chunk
+	if chunk_node:
+		chunk_node.queue_free()
+		active_voxels.clear()
+	
+	# Create new chunk node
+	chunk_node = Node3D.new()
+	chunk_node.name = "Chunk_" + str(chunk_pos)
+	add_child(chunk_node)
+	
+	# Generate terrain for chunk
+	generate_terrain(chunk_pos)
+	
+	if debug_enabled:
+		print("VoxelManager: Created chunk at ", chunk_pos)
+
+func generate_terrain(chunk_pos: Vector3) -> void:
+	for x in range(CHUNK_SIZE):
+		for y in range(CHUNK_SIZE):
+			for z in range(CHUNK_SIZE):
+				var world_pos = chunk_pos * CHUNK_SIZE + Vector3(x, y, z)
+				var noise_value = noise.get_noise_3d(
+					world_pos.x, world_pos.y, world_pos.z
+				)
+				
+				# Determine voxel type based on noise and height
+				var voxel_type = _get_voxel_type_for_terrain(noise_value, world_pos.y)
+				
+				if voxel_type != VoxelType.AIR:
+					create_voxel(Vector3(x, y, z), voxel_type)
+
+func _get_voxel_type_for_terrain(noise_value: float, height: float) -> VoxelType:
+	# Basic terrain generation rules
+	if noise_value < surface_level:
+		return VoxelType.AIR
+	
+	# Surface layer is grass
+	if height > CHUNK_SIZE * 0.75:
+		return VoxelType.GRASS
+	# Upper layer is dirt
+	elif height > CHUNK_SIZE * 0.5:
+		return VoxelType.DIRT
+	# Lower layer is stone
+	else:
+		return VoxelType.STONE
 
 # Creates a material with specified color
 func preload_material(color: Color) -> StandardMaterial3D:
@@ -46,24 +121,6 @@ func preload_material(color: Color) -> StandardMaterial3D:
 	material.roughness = 0.7
 	material.metallic = 0.0
 	return material
-
-# Creates a test pattern of voxels for development
-func _create_test_pattern() -> void:
-	# Create a small 2x2x2 cube of different materials
-	var positions = [
-		Vector3(0, 0, 0), Vector3(1, 0, 0),
-		Vector3(0, 1, 0), Vector3(1, 1, 0),
-		Vector3(0, 0, 1), Vector3(1, 0, 1)
-	]
-	
-	var types = [
-		VoxelType.DIRT, VoxelType.STONE,
-		VoxelType.METAL, VoxelType.DIRT,
-		VoxelType.STONE, VoxelType.METAL
-	]
-	
-	for i in range(positions.size()):
-		create_voxel(positions[i], types[i])
 
 # Creates a single voxel at the specified position with given type
 func create_voxel(position: Vector3, type: VoxelType) -> void:
@@ -86,10 +143,10 @@ func create_voxel(position: Vector3, type: VoxelType) -> void:
 	
 	# Setup mesh instance
 	mesh_instance.mesh = mesh
-	mesh_instance.position = position
+	mesh_instance.position = position * VOXEL_SIZE  # Scale position by voxel size
 	mesh_instance.name = "Voxel_" + str(position.x) + "_" + str(position.y) + "_" + str(position.z)
 	
-	# Add collision (optional but useful for interaction)
+	# Add collision
 	var static_body := StaticBody3D.new()
 	var collision_shape := CollisionShape3D.new()
 	var box_shape := BoxShape3D.new()
@@ -104,8 +161,8 @@ func create_voxel(position: Vector3, type: VoxelType) -> void:
 		"instance": mesh_instance
 	}
 	
-	# Add to scene tree
-	add_child(mesh_instance)
+	# Add to chunk node
+	chunk_node.add_child(mesh_instance)
 	
 	if debug_enabled:
 		print("VoxelManager: Created voxel of type ", type, " at ", position)
@@ -125,3 +182,19 @@ func get_voxel_type(position: Vector3) -> VoxelType:
 	if active_voxels.has(position):
 		return active_voxels[position].type
 	return VoxelType.AIR
+
+# Helper function to convert world position to chunk-local position
+func world_to_chunk_position(world_pos: Vector3) -> Vector3:
+	return Vector3(
+		floor(world_pos.x / CHUNK_SIZE),
+		floor(world_pos.y / CHUNK_SIZE),
+		floor(world_pos.z / CHUNK_SIZE)
+	)
+
+# Helper function to convert world position to voxel position within chunk
+func world_to_voxel_position(world_pos: Vector3) -> Vector3:
+	return Vector3(
+		posmod(world_pos.x, CHUNK_SIZE),
+		posmod(world_pos.y, CHUNK_SIZE),
+		posmod(world_pos.z, CHUNK_SIZE)
+	)

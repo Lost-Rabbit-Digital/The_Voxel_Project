@@ -1,8 +1,7 @@
-[gd_scene load_steps=7 format=3 uid="uid://yrxglwcwsqfy"]
+[gd_scene load_steps=6 format=3 uid="uid://yrxglwcwsqfy"]
 
 [ext_resource type="Script" uid="uid://bwnqknka1yyjj" path="res://scripts/voxels/voxel_manager.gd" id="1_uwrxv"]
 [ext_resource type="Script" uid="uid://gyeamovgi5ef" path="res://scripts/interaction/editor_style_camera.gd" id="2_yqjtg"]
-[ext_resource type="Script" uid="uid://bxwarlct4yu0s" path="res://scripts/environment/daylight_cycle.gd" id="3_lnu2h"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_lnu2h"]
 sky_top_color = Color(0.105882, 0.294118, 0.556863, 1)
@@ -32,8 +31,6 @@ script = ExtResource("2_yqjtg")
 transform = Transform3D(0.698678, -0.492456, 0.518977, 0, 0.725398, 0.688329, -0.715437, -0.48092, 0.50682, 0, 0, 0)
 shadow_enabled = true
 directional_shadow_mode = 0
-script = ExtResource("3_lnu2h")
-day_duration = 220.0
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="."]
 environment = SubResource("Environment_lnu2h")
