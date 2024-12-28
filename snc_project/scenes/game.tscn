@@ -1,0 +1,14 @@
+[gd_scene load_steps=2 format=3 uid="uid://yrxglwcwsqfy"]
+
+[ext_resource type="Script" uid="uid://bwnqknka1yyjj" path="res://scripts/voxels/voxel_manager.gd" id="1_uwrxv"]
+
+[node name="Node3D" type="Node3D"]
+
+[node name="VoxelManager" type="Node3D" parent="."]
+script = ExtResource("1_uwrxv")
+
+[node name="Camera3D" type="Camera3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5, 5, 5)
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
+shadow_enabled = true
