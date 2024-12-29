@@ -5,7 +5,7 @@ extends Resource
 const VOXEL_SIZE: float = 1.0
 var _neighbor_cache: Dictionary = {}
 
-# Face normals as simple Vector3 constants
+# Static face normals as Vector3 constants
 const NORMAL_TOP := Vector3(0, 1, 0)
 const NORMAL_BOTTOM := Vector3(0, -1, 0)
 const NORMAL_NORTH := Vector3(0, 0, 1)
@@ -22,11 +22,80 @@ const UV_LOOKUP = {
 
 var material_factory: MaterialFactory
 var chunk_manager: ChunkManager
+var _arrays := []
+var _surface_tool: SurfaceTool
+
+# Face data initialized in _init
+var _face_data: Dictionary
+var _uv_arrays: Dictionary
 
 func _init(mat_factory: MaterialFactory, chunk_mgr: ChunkManager) -> void:
 	material_factory = mat_factory
 	chunk_manager = chunk_mgr
+	_initialize_face_data()
+	_initialize_uv_data()
 	
+	
+func _initialize_face_data() -> void:
+	_face_data = {
+		"top": {
+			"vertices": PackedVector3Array([
+				Vector3(0, 1, 0), Vector3(1, 1, 0), Vector3(1, 1, 1),  # Triangle 1
+				Vector3(0, 1, 0), Vector3(1, 1, 1), Vector3(0, 1, 1)   # Triangle 2
+			]),
+			"normal": NORMAL_TOP,
+			"check_dir": NORMAL_TOP
+		},
+		"bottom": {
+			"vertices": PackedVector3Array([
+				Vector3(0, 0, 1), Vector3(1, 0, 1), Vector3(1, 0, 0),  # Triangle 1
+				Vector3(0, 0, 1), Vector3(1, 0, 0), Vector3(0, 0, 0)   # Triangle 2
+			]),
+			"normal": NORMAL_BOTTOM,
+			"check_dir": NORMAL_BOTTOM
+		},
+		"north": {
+			"vertices": PackedVector3Array([
+				Vector3(0, 0, 1), Vector3(0, 1, 1), Vector3(1, 1, 1),  # Triangle 1
+				Vector3(0, 0, 1), Vector3(1, 1, 1), Vector3(1, 0, 1)   # Triangle 2
+			]),
+			"normal": NORMAL_NORTH,
+			"check_dir": NORMAL_NORTH
+		},
+		"south": {
+			"vertices": PackedVector3Array([
+				Vector3(1, 0, 0), Vector3(1, 1, 0), Vector3(0, 1, 0),  # Triangle 1
+				Vector3(1, 0, 0), Vector3(0, 1, 0), Vector3(0, 0, 0)   # Triangle 2
+			]),
+			"normal": NORMAL_SOUTH,
+			"check_dir": NORMAL_SOUTH
+		},
+		"east": {
+			"vertices": PackedVector3Array([
+				Vector3(1, 0, 1), Vector3(1, 1, 1), Vector3(1, 1, 0),  # Triangle 1
+				Vector3(1, 0, 1), Vector3(1, 1, 0), Vector3(1, 0, 0)   # Triangle 2
+			]),
+			"normal": NORMAL_EAST,
+			"check_dir": NORMAL_EAST
+		},
+		"west": {
+			"vertices": PackedVector3Array([
+				Vector3(0, 0, 0), Vector3(0, 1, 0), Vector3(0, 1, 1),  # Triangle 1
+				Vector3(0, 0, 0), Vector3(0, 1, 1), Vector3(0, 0, 1)   # Triangle 2
+			]),
+			"normal": NORMAL_WEST,
+			"check_dir": NORMAL_WEST
+		}
+	}
+	
+func _initialize_uv_data() -> void:
+	_uv_arrays = {
+		"default": PackedVector2Array([
+			Vector2(0, 1), Vector2(1, 1), Vector2(1, 0),
+			Vector2(0, 1), Vector2(1, 0), Vector2(0, 0)
+		])
+	}
+
 func _get_vertices_for_face(face: String, base_pos: Vector3) -> PackedVector3Array:
 	var vertices = PackedVector3Array()
 	
@@ -91,173 +160,115 @@ func _get_normal_for_face(face: String) -> Vector3:
 		"west": return NORMAL_WEST
 	return Vector3.ZERO
 
+
 func build_mesh(chunk_data: ChunkData) -> MeshInstance3D:
-	# Use surface tool for better performance
-	var st = SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var surface_tool := SurfaceTool.new()
+	surface_tool.begin(Mesh.PRIMITIVE_TRIANGLES)
 	
-	var vertex_count = 0
+	# Clear any previous data
+	_arrays.clear()
 	
-	# Process voxels
+	var vertices_added := 0
+	
 	for pos in chunk_data.voxels:
 		var voxel_type = chunk_data.get_voxel(pos)
 		if voxel_type == VoxelTypes.Type.AIR:
 			continue
 			
-		# Add faces to surface tool
-		for face in ["top", "bottom", "north", "south", "east", "west"]:
-			var check_pos = pos + _get_normal_for_face(face)
-			if _should_add_face(check_pos, chunk_data):
-				var face_vertices = _get_vertices_for_face(face, pos * VOXEL_SIZE)
-				var face_normal = _get_normal_for_face(face)
-				var face_uvs = _get_face_uvs(face, voxel_type)
-				
-				# Add vertices to surface tool using correct method names
-				for i in range(face_vertices.size()):
-					st.set_normal(face_normal)
-					st.set_uv(face_uvs[i])
-					st.add_vertex(face_vertices[i])
-					vertex_count += 1
+		var world_pos: Vector3 = pos * VOXEL_SIZE
+		_add_voxel_faces(world_pos, pos, voxel_type, chunk_data, surface_tool)
+		vertices_added += 1
 	
-	if vertex_count == 0:
+	if vertices_added == 0:
+		print("No vertices added to mesh")
 		return null
 	
-	# Generate normals and tangents
-	st.generate_normals()
-	st.generate_tangents()
+	# Generate normals and create the mesh
+	surface_tool.generate_normals()
+	surface_tool.index()
 	
-	# Create mesh from surface tool
-	var mesh = st.commit()
-	
-	# Apply material
+	var array_mesh := surface_tool.commit()
+	if not array_mesh:
+		printerr("Failed to create array mesh")
+		return null
+		
 	var material = material_factory.get_material_for_type(VoxelTypes.Type.STONE)
-	material.shading_mode = BaseMaterial3D.SHADING_MODE_PER_VERTEX
-	material.cull_mode = BaseMaterial3D.CULL_BACK
-	material.vertex_color_use_as_albedo = true
-	mesh.surface_set_material(0, material)
+	if not material:
+		printerr("Failed to get material")
+		return null
+		
+	array_mesh.surface_set_material(0, material)
 	
-	# Create mesh instance
-	var mesh_instance = MeshInstance3D.new()
-	mesh_instance.mesh = mesh
+	var mesh_instance := MeshInstance3D.new()
+	mesh_instance.mesh = array_mesh
 	mesh_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 	mesh_instance.gi_mode = GeometryInstance3D.GI_MODE_DYNAMIC
 	
 	_add_collision(mesh_instance)
 	return mesh_instance
-
-func _should_add_face(pos: Vector3, chunk_data: ChunkData) -> bool:
-	# Quick bounds check
-	if pos.x < 0 or pos.x >= ChunkData.CHUNK_SIZE or \
-	   pos.y < 0 or pos.y >= ChunkData.CHUNK_SIZE or \
-	   pos.z < 0 or pos.z >= ChunkData.CHUNK_SIZE:
-		
-		# Convert to world position
-		var world_pos = chunk_data.local_to_world(pos)
-		var chunk_pos = chunk_manager.get_chunk_position(world_pos)
-		
-		# Use cached chunk if available
-		if not chunk_pos in _neighbor_cache:
-			_neighbor_cache[chunk_pos] = chunk_manager.get_chunk_at_position(world_pos)
-			
-		var neighbor_chunk = _neighbor_cache[chunk_pos]
-		if neighbor_chunk:
-			var local_pos = neighbor_chunk.world_to_local(world_pos)
-			return neighbor_chunk.get_voxel(local_pos) == VoxelTypes.Type.AIR
-			
-		return true
 	
-	# Inside current chunk, add face only if neighbor is air
-	return chunk_data.get_voxel(pos) == VoxelTypes.Type.AIR
-	# Quick bounds check
-	if pos.x < 0 or pos.x >= ChunkData.CHUNK_SIZE or \
-	   pos.y < 0 or pos.y >= ChunkData.CHUNK_SIZE or \
-	   pos.z < 0 or pos.z >= ChunkData.CHUNK_SIZE:
-		
-		# Convert to world position
-		var world_pos = chunk_data.local_to_world(pos)
-		var chunk_pos = chunk_manager.get_chunk_position(world_pos)
-		
-		# Use cached chunk if available
-		if not chunk_pos in _neighbor_cache:
-			_neighbor_cache[chunk_pos] = chunk_manager.get_chunk_at_position(world_pos)
-			
-		var neighbor_chunk = _neighbor_cache[chunk_pos]
-		if neighbor_chunk:
-			var local_pos = neighbor_chunk.world_to_local(world_pos)
-			return neighbor_chunk.get_voxel(local_pos) == VoxelTypes.Type.AIR
-			
-		return true
-	
-	# Inside current chunk, add face only if neighbor is air
-	return chunk_data.get_voxel(pos) == VoxelTypes.Type.AIR
-	# Check if the position is outside the current chunk bounds
-	if pos.x < 0 or pos.x >= ChunkData.CHUNK_SIZE or \
-	   pos.y < 0 or pos.y >= ChunkData.CHUNK_SIZE or \
-	   pos.z < 0 or pos.z >= ChunkData.CHUNK_SIZE:
-		
-		# Convert to world position to check neighboring chunks
-		var world_pos = chunk_data.local_to_world(pos)
-		var neighbor_chunk = chunk_manager.get_chunk_at_position(world_pos)
-		
-		if neighbor_chunk:
-			# Convert world position to local position in the neighboring chunk
-			var local_pos = neighbor_chunk.world_to_local(world_pos)
-			# Only add face if neighbor block is air
-			return neighbor_chunk.get_voxel(local_pos) == VoxelTypes.Type.AIR
-		
-		# Add face if no neighboring chunk exists (for now)
-		return true
-	
-	# Inside current chunk, add face only if neighbor is air
-	return chunk_data.get_voxel(pos) == VoxelTypes.Type.AIR
-
-func clear_neighbor_cache() -> void:
-	_neighbor_cache.clear()
-	
-func _get_face_uvs(face: String, voxel_type: VoxelTypes.Type) -> PackedVector2Array:
-	var uvs = PackedVector2Array()
-	uvs.resize(6)  # Pre-allocate for 6 vertices
-	
-	# Use pre-calculated UV coordinates
-	var base_uv = UV_LOOKUP[voxel_type]
-	var uv_size = 1.0/16.0
-	
-	var u1 = base_uv.x * uv_size
-	var v1 = base_uv.y * uv_size
-	var u2 = u1 + uv_size
-	var v2 = v1 + uv_size
-	
-	# Direct array access is faster than push_back
-	uvs[0] = Vector2(u1, v2)
-	uvs[1] = Vector2(u2, v2)
-	uvs[2] = Vector2(u2, v1)
-	uvs[3] = Vector2(u1, v2)
-	uvs[4] = Vector2(u2, v1)
-	uvs[5] = Vector2(u1, v1)
-	
-	return uvs
-func _add_voxel_faces(pos: Vector3, chunk_data: ChunkData, vertices: PackedVector3Array, normals: PackedVector3Array, uvs: PackedVector2Array) -> void:
-	var world_pos = pos * VOXEL_SIZE
-	var voxel_type = chunk_data.get_voxel(pos)
-	
-	for face in ["top", "bottom", "north", "south", "east", "west"]:
-		var check_pos = pos + _get_normal_for_face(face)
-		if _should_add_face(check_pos, chunk_data):
-			var face_vertices = _get_vertices_for_face(face, world_pos)
-			var face_uvs = _get_face_uvs(face, voxel_type)
-			
-			# Add vertices and normals
-			for i in range(face_vertices.size()):
-				vertices.push_back(face_vertices[i])
-				normals.push_back(_get_normal_for_face(face))
-				uvs.push_back(face_uvs[i])
-
 func _add_collision(mesh_instance: MeshInstance3D) -> void:
-	var body = StaticBody3D.new()
-	var shape = ConcavePolygonShape3D.new()
-	var collision_shape = CollisionShape3D.new()
+	var body := StaticBody3D.new()
+	var shape := ConcavePolygonShape3D.new()
+	var collision_shape := CollisionShape3D.new()
 	
 	shape.set_faces(mesh_instance.mesh.get_faces())
 	collision_shape.shape = shape
 	body.add_child(collision_shape)
 	mesh_instance.add_child(body)
+
+func clear_neighbor_cache() -> void:
+	_neighbor_cache.clear()
+	
+func _get_face_uvs(face_name: String, voxel_type: VoxelTypes.Type) -> PackedVector2Array:
+	# Get UV coordinates from atlas based on voxel type
+	var base_uv = UV_LOOKUP[voxel_type]
+	var uv_size = 1.0/16.0  # Assuming 16x16 texture atlas
+	
+	var uvs = PackedVector2Array()
+	uvs.resize(6)  # 6 vertices per face (2 triangles)
+	
+	var u = base_uv.x * uv_size
+	var v = base_uv.y * uv_size
+	
+	# Standard UV mapping for a quad
+	uvs[0] = Vector2(u, v + uv_size)          # Bottom-left
+	uvs[1] = Vector2(u + uv_size, v + uv_size) # Bottom-right
+	uvs[2] = Vector2(u + uv_size, v)          # Top-right
+	
+	uvs[3] = Vector2(u, v + uv_size)          # Bottom-left
+	uvs[4] = Vector2(u + uv_size, v)          # Top-right
+	uvs[5] = Vector2(u, v)                    # Top-left
+	
+	return uvs
+	
+func _should_add_face(pos: Vector3, chunk_data: ChunkData) -> bool:
+	if not chunk_data.is_position_valid(pos):
+		var world_pos = chunk_data.local_to_world(pos)
+		var chunk_pos = chunk_manager.get_chunk_position(world_pos)
+		
+		if not chunk_pos in _neighbor_cache:
+			_neighbor_cache[chunk_pos] = chunk_manager.get_chunk_at_position(world_pos)
+			
+		var neighbor_chunk = _neighbor_cache[chunk_pos]
+		if neighbor_chunk:
+			var local_pos = neighbor_chunk.world_to_local(world_pos)
+			return neighbor_chunk.get_voxel(local_pos) == VoxelTypes.Type.AIR
+		return true
+	
+	return chunk_data.get_voxel(pos) == VoxelTypes.Type.AIR
+	
+func _add_voxel_faces(world_pos: Vector3, chunk_pos: Vector3, voxel_type: int, chunk_data: ChunkData, surface_tool: SurfaceTool) -> void:
+	for face_name in _face_data:
+		var face = _face_data[face_name]
+		var check_pos = chunk_pos + face.check_dir
+		
+		if _should_add_face(check_pos, chunk_data):
+			var uvs = _get_face_uvs(face_name, voxel_type)
+			
+			# Add vertices for the face
+			for i in range(face.vertices.size()):
+				# Set normal and UV before adding vertex
+				surface_tool.set_normal(face.normal)
+				surface_tool.set_uv(uvs[i])  # Use corresponding UV for each vertex
+				surface_tool.add_vertex(face.vertices[i] + world_pos)
