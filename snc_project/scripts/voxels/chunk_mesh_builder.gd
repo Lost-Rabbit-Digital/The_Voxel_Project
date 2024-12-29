@@ -13,9 +13,11 @@ const NORMAL_EAST := Vector3(1, 0, 0)
 const NORMAL_WEST := Vector3(-1, 0, 0)
 
 var material_factory: MaterialFactory
+var chunk_manager: ChunkManager
 
-func _init(mat_factory: MaterialFactory) -> void:
+func _init(mat_factory: MaterialFactory, chunk_mgr: ChunkManager) -> void:
 	material_factory = mat_factory
+	chunk_manager = chunk_mgr
 	
 func _get_vertices_for_face(face: String, base_pos: Vector3) -> PackedVector3Array:
 	var vertices = PackedVector3Array()
@@ -121,16 +123,26 @@ func build_mesh(chunk_data: ChunkData) -> MeshInstance3D:
 	return mesh_instance
 
 func _should_add_face(pos: Vector3, chunk_data: ChunkData) -> bool:
-	# First check if we're at a chunk boundary
-	if pos.x < 0 or pos.y < 0 or pos.z < 0 or \
-	   pos.x >= ChunkData.CHUNK_SIZE or pos.y >= ChunkData.CHUNK_SIZE or pos.z >= ChunkData.CHUNK_SIZE:
-		# For chunk boundaries, we need to get the voxel from the neighboring chunk
-		# For now, we'll show faces at chunk boundaries until we implement chunk loading
+	# Check if the position is outside the current chunk bounds
+	if pos.x < 0 or pos.x >= ChunkData.CHUNK_SIZE or \
+	   pos.y < 0 or pos.y >= ChunkData.CHUNK_SIZE or \
+	   pos.z < 0 or pos.z >= ChunkData.CHUNK_SIZE:
+		
+		# Convert to world position to check neighboring chunks
+		var world_pos = chunk_data.local_to_world(pos)
+		var neighbor_chunk = chunk_manager.get_chunk_at_position(world_pos)
+		
+		if neighbor_chunk:
+			# Convert world position to local position in the neighboring chunk
+			var local_pos = neighbor_chunk.world_to_local(world_pos)
+			# Only add face if neighbor block is air
+			return neighbor_chunk.get_voxel(local_pos) == VoxelTypes.Type.AIR
+		
+		# Add face if no neighboring chunk exists (for now)
 		return true
 	
-	# Inside the chunk, check if the neighbor is air
-	var neighbor_type = chunk_data.get_voxel(pos)
-	return neighbor_type == VoxelTypes.Type.AIR
+	# Inside current chunk, add face only if neighbor is air
+	return chunk_data.get_voxel(pos) == VoxelTypes.Type.AIR
 
 func _add_voxel_faces(pos: Vector3, chunk_data: ChunkData, vertices: PackedVector3Array, normals: PackedVector3Array, uvs: PackedVector2Array) -> void:
 	var world_pos = pos * VOXEL_SIZE
