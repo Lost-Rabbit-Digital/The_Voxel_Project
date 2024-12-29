@@ -15,12 +15,28 @@ var generation_thread: Thread
 var mutex: Mutex
 var thread_running := false
 var chunks_to_add: Array = []
+var chunk_cache: ChunkCache
+var save_chunks_timer: Timer
 
 func _init() -> void:
 	terrain_generator = TerrainGenerator.new()
 	mesh_builder = ChunkMeshBuilder.new(MaterialFactory.new(), self)
 	mutex = Mutex.new()
 	generation_thread = Thread.new()
+	chunk_cache = ChunkCache.new()
+	
+	# Setup autosave timer
+	save_chunks_timer = Timer.new()
+	save_chunks_timer.wait_time = 30.0  # Save chunks every 30 seconds
+	save_chunks_timer.timeout.connect(_on_save_chunks_timer_timeout)
+	add_child(save_chunks_timer)
+	save_chunks_timer.start()
+
+func _on_save_chunks_timer_timeout() -> void:
+	# Save all active chunks to cache
+	for chunk_pos in active_chunks:
+		var chunk = active_chunks[chunk_pos]
+		chunk_cache.save_chunk(chunk_pos, chunk.data)
 
 func _ready() -> void:
 	# Start the generation thread
@@ -28,10 +44,17 @@ func _ready() -> void:
 	generation_thread.start(_thread_function)
 
 func _exit_tree() -> void:
-	# Clean up thread on exit
+	# Save all chunks before exiting
+	for chunk_pos in active_chunks:
+		var chunk = active_chunks[chunk_pos]
+		chunk_cache.save_chunk(chunk_pos, chunk.data)
+	
+	# Clean up thread
 	thread_running = false
 	generation_thread.wait_to_finish()
-
+	
+	# Clean old cache files
+	chunk_cache.clean_cache()
 func _thread_function() -> void:
 	while thread_running:
 		mutex.lock()
@@ -45,15 +68,19 @@ func _thread_function() -> void:
 				
 			if chunk_pos in active_chunks:
 				continue
-				
-			var chunk_data = terrain_generator.generate_chunk_data(chunk_pos)
+			
+			# Try to load from cache first
+			var chunk_data = chunk_cache.load_chunk(chunk_pos)
+			
+			# Generate new chunk if not cached
+			if not chunk_data:
+				chunk_data = terrain_generator.generate_chunk_data(chunk_pos)
 			
 			mutex.lock()
 			chunks_to_add.append({"pos": chunk_pos, "data": chunk_data})
 			mutex.unlock()
 			
 			OS.delay_msec(1)  # Prevent thread from hogging CPU
-
 func _process(_delta: float) -> void:
 	# Process queued chunks
 	mutex.lock()
@@ -161,10 +188,13 @@ func create_chunk(chunk_pos: Vector3) -> void:
 func remove_chunk(chunk_pos: Vector3) -> void:
 	if chunk_pos in active_chunks:
 		var chunk = active_chunks[chunk_pos]
+		# Save chunk to cache before removing
+		chunk_cache.save_chunk(chunk_pos, chunk.data)
 		chunk.mesh.queue_free()
 		active_chunks.erase(chunk_pos)
 		if debug_enabled:
 			print("Removed chunk at: ", chunk_pos)
+
 
 func get_chunk_position(world_pos: Vector3) -> Vector3:
 	return Vector3(
