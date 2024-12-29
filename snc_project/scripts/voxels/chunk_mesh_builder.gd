@@ -144,28 +144,62 @@ func _should_add_face(pos: Vector3, chunk_data: ChunkData) -> bool:
 	# Inside current chunk, add face only if neighbor is air
 	return chunk_data.get_voxel(pos) == VoxelTypes.Type.AIR
 
+func _get_face_uvs(face: String, voxel_type: VoxelTypes.Type) -> PackedVector2Array:
+	var uvs = PackedVector2Array()
+	
+	# UV coordinates for a single tile in the texture atlas
+	var uv_size = 1.0/16.0  # Assuming 16x16 texture grid
+	
+	# Get UV offset based on voxel type (you can customize this)
+	var uv_x = 0
+	var uv_y = 0
+	
+	match voxel_type:
+		VoxelTypes.Type.DIRT:
+			uv_x = 0
+			uv_y = 0
+		VoxelTypes.Type.STONE:
+			uv_x = 1
+			uv_y = 0
+		VoxelTypes.Type.GRASS:
+			uv_x = 2
+			uv_y = 0
+		VoxelTypes.Type.METAL:
+			uv_x = 3
+			uv_y = 0
+	
+	# Calculate UV coordinates
+	var u1 = uv_x * uv_size
+	var v1 = uv_y * uv_size
+	var u2 = u1 + uv_size
+	var v2 = v1 + uv_size
+	
+	# Add UVs in the correct order for the triangles
+	uvs.push_back(Vector2(u1, v2))  # Bottom-left
+	uvs.push_back(Vector2(u2, v2))  # Bottom-right
+	uvs.push_back(Vector2(u2, v1))  # Top-right
+	
+	uvs.push_back(Vector2(u1, v2))  # Bottom-left
+	uvs.push_back(Vector2(u2, v1))  # Top-right
+	uvs.push_back(Vector2(u1, v1))  # Top-left
+	
+	return uvs
+
 func _add_voxel_faces(pos: Vector3, chunk_data: ChunkData, vertices: PackedVector3Array, normals: PackedVector3Array, uvs: PackedVector2Array) -> void:
 	var world_pos = pos * VOXEL_SIZE
+	var voxel_type = chunk_data.get_voxel(pos)
 	
 	for face in ["top", "bottom", "north", "south", "east", "west"]:
 		var check_pos = pos + _get_normal_for_face(face)
 		if _should_add_face(check_pos, chunk_data):
 			var face_vertices = _get_vertices_for_face(face, world_pos)
-			var normal = _get_normal_for_face(face)
+			var face_uvs = _get_face_uvs(face, voxel_type)
 			
-			for vertex in face_vertices:
-				vertices.push_back(vertex)
-				normals.push_back(normal)
-			
-			# Add UVs for this face
-			uvs.append_array([
-				Vector2(0, 0),  # First triangle
-				Vector2(1, 0),
-				Vector2(1, 1),
-				Vector2(0, 0),  # Second triangle
-				Vector2(1, 1),
-				Vector2(0, 1)
-			])
+			# Add vertices and normals
+			for i in range(face_vertices.size()):
+				vertices.push_back(face_vertices[i])
+				normals.push_back(_get_normal_for_face(face))
+				uvs.push_back(face_uvs[i])
 
 func _add_collision(mesh_instance: MeshInstance3D) -> void:
 	var body = StaticBody3D.new()
