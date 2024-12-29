@@ -110,6 +110,11 @@ func _process(_delta: float) -> void:
 			
 		_finalize_chunk(chunk_info.pos, chunk_info.data)
 		chunks_added += 1
+	
+	# Print debug info every 60 frames
+	if debug_enabled and Engine.get_process_frames() % 60 == 0:
+		print("Active chunks: ", get_active_chunk_count())
+		print("Generation queue size: ", chunk_generation_queue.size())
 
 func update_chunks(center_pos: Vector3) -> void:
 	var chunk_pos = get_chunk_position(center_pos)
@@ -120,25 +125,28 @@ func update_chunks(center_pos: Vector3) -> void:
 	last_center_chunk = chunk_pos
 	
 	# Calculate needed chunks and their distances
-	var chunks_to_generate = []
+	var needed_chunks := {}
 	for x in range(-RENDER_DISTANCE_HORIZONTAL, RENDER_DISTANCE_HORIZONTAL + 1):
 		for y in range(-RENDER_DISTANCE_VERTICAL, RENDER_DISTANCE_VERTICAL + 1):
 			for z in range(-RENDER_DISTANCE_HORIZONTAL, RENDER_DISTANCE_HORIZONTAL + 1):
 				var new_chunk_pos = chunk_pos + Vector3(x, y, z)
 				var distance = new_chunk_pos.distance_to(chunk_pos)
 				if distance <= RENDER_DISTANCE_HORIZONTAL:
-					chunks_to_generate.append({
-						"pos": new_chunk_pos,
-						"distance": distance
-					})
+					needed_chunks[new_chunk_pos] = true
 	
-	# Sort by distance for better loading priority
-	chunks_to_generate.sort_custom(func(a, b): return a.distance < b.distance)
+	# Remove chunks that are out of range
+	var chunks_to_remove = []
+	for existing_chunk_pos in active_chunks:
+		if not needed_chunks.has(existing_chunk_pos):
+			chunks_to_remove.append(existing_chunk_pos)
+	
+	# Remove the chunks outside render distance
+	for chunk_pos_to_remove in chunks_to_remove:
+		remove_chunk(chunk_pos_to_remove)
 	
 	# Queue new chunks for generation
 	mutex.lock()
-	for chunk in chunks_to_generate:
-		var new_pos = chunk.pos
+	for new_pos in needed_chunks:
 		if not active_chunks.has(new_pos) and not new_pos in chunk_generation_queue:
 			chunk_generation_queue.append(new_pos)
 	mutex.unlock()
@@ -200,13 +208,19 @@ func create_chunk(chunk_pos: Vector3) -> void:
 func remove_chunk(chunk_pos: Vector3) -> void:
 	if chunk_pos in active_chunks:
 		var chunk = active_chunks[chunk_pos]
+		# Save chunk data to cache before removing
 		chunk_cache.save_chunk(chunk_pos, chunk.data)
-		chunk.mesh.queue_free()
+		# Free the mesh instance
+		if chunk.mesh:
+			chunk.mesh.queue_free()
 		active_chunks.erase(chunk_pos)
-		mesh_builder.clear_neighbor_cache() # Add this line
+		# Clear neighbor cache to force mesh updates
+		mesh_builder.clear_neighbor_cache()
 		if debug_enabled:
 			print("Removed chunk at: ", chunk_pos)
 
+func get_active_chunk_count() -> int:
+	return active_chunks.size()
 
 func get_chunk_position(world_pos: Vector3) -> Vector3:
 	return Vector3(
