@@ -20,6 +20,26 @@ const UV_LOOKUP = {
 	VoxelTypes.Type.METAL: Vector2(3, 0)
 }
 
+# Update the texture coordinates to match your actual texture atlas
+const TEXTURE_SIZE := 16.0  # Size of each texture in the atlas
+const ATLAS_SIZE := 256.0   # Total atlas size in pixels
+
+# Texture coordinates in atlas
+const TEXTURE_COORDS := {
+	"grass_top": Vector2(0, 0),
+	"grass_side": Vector2(3, 0),
+	"dirt": Vector2(2, 0),
+	"stone": Vector2(1, 0),
+	"snow": Vector2(2, 4),
+	"sand": Vector2(2, 1),
+}
+
+# Height ranges for biome transitions
+const DEEP_UNDERGROUND := -32
+const SURFACE_LEVEL := 0
+const MOUNTAIN_HEIGHT := 32
+const SNOW_HEIGHT := 64
+
 var material_factory: MaterialFactory
 var chunk_manager: ChunkManager
 var _arrays := []
@@ -160,13 +180,73 @@ func _get_normal_for_face(face: String) -> Vector3:
 		"west": return NORMAL_WEST
 	return Vector3.ZERO
 
+func _get_texture_for_block(world_pos: Vector3, face: String, voxel_type: int) -> String:
+	var y := int(world_pos.y)
+	
+	# Enhanced texture selection based on block type and position
+	match voxel_type:
+		VoxelTypes.Type.GRASS:
+			if face == "top":
+				return "grass_top"
+			elif face == "bottom":
+				return "dirt"
+			else:
+				return "grass_side"
+		VoxelTypes.Type.DIRT:
+			if y < DEEP_UNDERGROUND:
+				return "stone"
+			return "dirt"
+		VoxelTypes.Type.STONE:
+			if y > SNOW_HEIGHT:
+				return "snow" if face == "top" else "stone"
+			return "stone"
+		_:
+			# Default fallback
+			if y < DEEP_UNDERGROUND:
+				return "stone"
+			elif y > SNOW_HEIGHT:
+				return "snow"
+			return "dirt"
+
+func _get_uvs_for_texture(texture_name: String, face: String = "") -> PackedVector2Array:
+	var base_uv: Vector2 = TEXTURE_COORDS[texture_name]
+	var uv_size := TEXTURE_SIZE / ATLAS_SIZE
+	
+	var uvs := PackedVector2Array()
+	uvs.resize(6)
+	
+	var u := base_uv.x * uv_size
+	var v := base_uv.y * uv_size
+	
+	# Check if this is a grass side texture that needs rotation
+	if texture_name == "grass_side" and (face == "north" or face == "south" or face == "east" or face == "west"):
+		# Rotated UV mapping for side faces
+		# First triangle
+		uvs[4] = Vector2(u + uv_size, v)           # Bottom-right
+		uvs[5] = Vector2(u + uv_size, v + uv_size) # Top-right
+		uvs[3] = Vector2(u, v + uv_size)           # Top-left
+		
+		# Second triangle
+		uvs[2] = Vector2(u + uv_size, v)           # Bottom-right
+		uvs[0] = Vector2(u, v + uv_size)           # Top-left
+		uvs[1] = Vector2(u, v)                     # Bottom-left
+	else:
+		# Standard UV mapping for other textures
+		# First triangle
+		uvs[0] = Vector2(u, v + uv_size)           # Bottom-left
+		uvs[1] = Vector2(u + uv_size, v + uv_size) # Bottom-right
+		uvs[2] = Vector2(u + uv_size, v)           # Top-right
+		
+		# Second triangle
+		uvs[3] = Vector2(u, v + uv_size)           # Bottom-left
+		uvs[4] = Vector2(u + uv_size, v)           # Top-right
+		uvs[5] = Vector2(u, v)                     # Top-left
+	
+	return uvs
 
 func build_mesh(chunk_data: ChunkData) -> MeshInstance3D:
 	var surface_tool := SurfaceTool.new()
 	surface_tool.begin(Mesh.PRIMITIVE_TRIANGLES)
-	
-	# Clear any previous data
-	_arrays.clear()
 	
 	var vertices_added := 0
 	
@@ -180,11 +260,7 @@ func build_mesh(chunk_data: ChunkData) -> MeshInstance3D:
 		vertices_added += 1
 	
 	if vertices_added == 0:
-		print("No vertices added to mesh")
 		return null
-	
-	# IMPORTANT: Remove this line - we don't want to generate smooth normals
-	# surface_tool.generate_normals()
 	
 	surface_tool.index()
 	
@@ -271,9 +347,13 @@ func _add_voxel_faces(world_pos: Vector3, chunk_pos: Vector3, voxel_type: int, c
 		var check_pos = chunk_pos + face.check_dir
 		
 		if _should_add_face(check_pos, chunk_data):
+			# Get the appropriate texture based on height and face
+			var texture_name := _get_texture_for_block(world_pos, face_name, voxel_type)
+			# Pass the face name to get correct UV rotation
+			var uvs := _get_uvs_for_texture(texture_name, face_name)
+			
 			# Add vertices for the face
 			for i in range(face.vertices.size()):
-				# Important: DON'T interpolate normals - use exact face normal
 				surface_tool.set_normal(face.normal)
-				surface_tool.set_uv(_uv_arrays.default[i])
+				surface_tool.set_uv(uvs[i])
 				surface_tool.add_vertex(face.vertices[i] + world_pos)
