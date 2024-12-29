@@ -2,7 +2,7 @@
 
 A voxel-based dungeon crawler that combines the immersive first-person RPG elements of Daggerfall with modern voxel-based terrain and construction mechanics. Delve into procedurally generated dungeons, fight enemies, collect loot, and shape the world around you - all while experiencing a classic RPG interface reimagined for the modern era.
 
-![Game Screenshot](github_screenshots/screenshot_1.png)
+![Game Screenshot](github_screenshots/screenshot_2.png)
 
 ## Features
 
@@ -20,9 +20,8 @@ A voxel-based dungeon crawler that combines the immersive first-person RPG eleme
 
 ### Prerequisites
 
-- Godot 4.2 or later
-- OpenGL 3.3+ compatible graphics card
-- 4GB RAM minimum (8GB recommended)
+- Godot 4.0 or later
+- 1GB RAM minimum (64GB recommended)
 - 500MB available storage
 
 ### Installation
