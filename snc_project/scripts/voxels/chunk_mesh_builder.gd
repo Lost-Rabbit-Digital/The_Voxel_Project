@@ -168,6 +168,28 @@ func _should_add_face(pos: Vector3, chunk_data: ChunkData) -> bool:
 	
 	# Inside current chunk, add face only if neighbor is air
 	return chunk_data.get_voxel(pos) == VoxelTypes.Type.AIR
+	# Quick bounds check
+	if pos.x < 0 or pos.x >= ChunkData.CHUNK_SIZE or \
+	   pos.y < 0 or pos.y >= ChunkData.CHUNK_SIZE or \
+	   pos.z < 0 or pos.z >= ChunkData.CHUNK_SIZE:
+		
+		# Convert to world position
+		var world_pos = chunk_data.local_to_world(pos)
+		var chunk_pos = chunk_manager.get_chunk_position(world_pos)
+		
+		# Use cached chunk if available
+		if not chunk_pos in _neighbor_cache:
+			_neighbor_cache[chunk_pos] = chunk_manager.get_chunk_at_position(world_pos)
+			
+		var neighbor_chunk = _neighbor_cache[chunk_pos]
+		if neighbor_chunk:
+			var local_pos = neighbor_chunk.world_to_local(world_pos)
+			return neighbor_chunk.get_voxel(local_pos) == VoxelTypes.Type.AIR
+			
+		return true
+	
+	# Inside current chunk, add face only if neighbor is air
+	return chunk_data.get_voxel(pos) == VoxelTypes.Type.AIR
 	# Check if the position is outside the current chunk bounds
 	if pos.x < 0 or pos.x >= ChunkData.CHUNK_SIZE or \
 	   pos.y < 0 or pos.y >= ChunkData.CHUNK_SIZE or \
