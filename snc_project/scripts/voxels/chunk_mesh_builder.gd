@@ -1,129 +1,150 @@
 # chunk_mesh_builder.gd
-
 class_name ChunkMeshBuilder
 extends Resource
 
 const VOXEL_SIZE: float = 1.0
-const FACE_DIRECTIONS = {
-	"top": Vector3(0, 1, 0),
-	"bottom": Vector3(0, -1, 0),
-	"right": Vector3(1, 0, 0),
-	"left": Vector3(-1, 0, 0),
-	"front": Vector3(0, 0, 1),
-	"back": Vector3(0, 0, -1)
-}
+
+# Face normals as simple Vector3 constants
+const NORMAL_TOP := Vector3(0, 1, 0)
+const NORMAL_BOTTOM := Vector3(0, -1, 0)
+const NORMAL_NORTH := Vector3(0, 0, 1)
+const NORMAL_SOUTH := Vector3(0, 0, -1)
+const NORMAL_EAST := Vector3(1, 0, 0)
+const NORMAL_WEST := Vector3(-1, 0, 0)
 
 var material_factory: MaterialFactory
 
 func _init(mat_factory: MaterialFactory) -> void:
 	material_factory = mat_factory
 
+func _get_vertices_for_face(face: String, base_pos: Vector3) -> PackedVector3Array:
+	var vertices = PackedVector3Array()
+	match face:
+		"top":
+			vertices.push_back(base_pos + Vector3(0, 1, 0))
+			vertices.push_back(base_pos + Vector3(1, 1, 0))
+			vertices.push_back(base_pos + Vector3(1, 1, 1))
+			vertices.push_back(base_pos + Vector3(0, 1, 0))
+			vertices.push_back(base_pos + Vector3(1, 1, 1))
+			vertices.push_back(base_pos + Vector3(0, 1, 1))
+		"bottom":
+			vertices.push_back(base_pos + Vector3(0, 0, 1))
+			vertices.push_back(base_pos + Vector3(1, 0, 1))
+			vertices.push_back(base_pos + Vector3(1, 0, 0))
+			vertices.push_back(base_pos + Vector3(0, 0, 1))
+			vertices.push_back(base_pos + Vector3(1, 0, 0))
+			vertices.push_back(base_pos + Vector3(0, 0, 0))
+		"north":
+			vertices.push_back(base_pos + Vector3(0, 0, 1))
+			vertices.push_back(base_pos + Vector3(1, 0, 1))
+			vertices.push_back(base_pos + Vector3(1, 1, 1))
+			vertices.push_back(base_pos + Vector3(0, 0, 1))
+			vertices.push_back(base_pos + Vector3(1, 1, 1))
+			vertices.push_back(base_pos + Vector3(0, 1, 1))
+		"south":
+			vertices.push_back(base_pos + Vector3(0, 0, 0))
+			vertices.push_back(base_pos + Vector3(0, 1, 0))
+			vertices.push_back(base_pos + Vector3(1, 1, 0))
+			vertices.push_back(base_pos + Vector3(0, 0, 0))
+			vertices.push_back(base_pos + Vector3(1, 1, 0))
+			vertices.push_back(base_pos + Vector3(1, 0, 0))
+		"east":
+			vertices.push_back(base_pos + Vector3(1, 0, 0))
+			vertices.push_back(base_pos + Vector3(1, 1, 0))
+			vertices.push_back(base_pos + Vector3(1, 1, 1))
+			vertices.push_back(base_pos + Vector3(1, 0, 0))
+			vertices.push_back(base_pos + Vector3(1, 1, 1))
+			vertices.push_back(base_pos + Vector3(1, 0, 1))
+		"west":
+			vertices.push_back(base_pos + Vector3(0, 0, 0))
+			vertices.push_back(base_pos + Vector3(0, 0, 1))
+			vertices.push_back(base_pos + Vector3(0, 1, 1))
+			vertices.push_back(base_pos + Vector3(0, 0, 0))
+			vertices.push_back(base_pos + Vector3(0, 1, 1))
+			vertices.push_back(base_pos + Vector3(0, 1, 0))
+	return vertices
+
+func _get_normal_for_face(face: String) -> Vector3:
+	match face:
+		"top": return NORMAL_TOP
+		"bottom": return NORMAL_BOTTOM
+		"north": return NORMAL_NORTH
+		"south": return NORMAL_SOUTH
+		"east": return NORMAL_EAST
+		"west": return NORMAL_WEST
+	return Vector3.ZERO
+
 func build_mesh(chunk_data: ChunkData) -> MeshInstance3D:
-	var st := SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var arrays = []
+	arrays.resize(Mesh.ARRAY_MAX)
 	
-	# Set default material
-	st.set_material(material_factory.get_material_for_type(VoxelTypes.Type.STONE))
+	var vertices = PackedVector3Array()
+	var normals = PackedVector3Array()
+	var uvs = PackedVector2Array()
 	
-	var faces_added := false
+	# Process each voxel
 	for pos in chunk_data.voxels:
-		if _add_visible_faces(pos, chunk_data, st):
-			faces_added = true
+		var voxel_type = chunk_data.get_voxel(pos)
+		if voxel_type == VoxelTypes.Type.AIR:
+			continue
+			
+		_add_voxel_faces(pos, chunk_data, vertices, normals, uvs)
 	
-	if not faces_added:
+	# If no vertices were generated, return null
+	if vertices.size() == 0:
 		return null
-		
-	st.generate_normals()
-	st.generate_tangents()
 	
-	var mesh_instance := MeshInstance3D.new()
-	mesh_instance.mesh = st.commit()
+	# Create arrays
+	arrays[Mesh.ARRAY_VERTEX] = vertices
+	arrays[Mesh.ARRAY_NORMAL] = normals
+	arrays[Mesh.ARRAY_TEX_UV] = uvs
+	
+	# Create mesh
+	var mesh = ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	
+	# Setup material
+	var material = material_factory.get_material_for_type(VoxelTypes.Type.STONE)
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_PER_VERTEX
+	material.cull_mode = BaseMaterial3D.CULL_BACK
+	mesh.surface_set_material(0, material)
+	
+	# Create mesh instance
+	var mesh_instance = MeshInstance3D.new()
+	mesh_instance.mesh = mesh
+	mesh_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+	
 	_add_collision(mesh_instance)
-	
 	return mesh_instance
 
-func _add_visible_faces(pos: Vector3, chunk_data: ChunkData, st: SurfaceTool) -> bool:
-	var added_any := false
+func _add_voxel_faces(pos: Vector3, chunk_data: ChunkData, vertices: PackedVector3Array, normals: PackedVector3Array, uvs: PackedVector2Array) -> void:
+	var world_pos = pos * VOXEL_SIZE
 	
-	for face in FACE_DIRECTIONS:
-		var neighbor_pos = pos + FACE_DIRECTIONS[face]
-		
-		# Check if face should be visible (neighbor is air or outside chunk)
-		if _should_add_face(neighbor_pos, chunk_data):
-			_add_face(pos, face, st, chunk_data.get_voxel(pos))
-			added_any = true
-	
-	return added_any
+	for face in ["top", "bottom", "north", "south", "east", "west"]:
+		var check_pos = pos + _get_normal_for_face(face)
+		if _should_add_face(check_pos, chunk_data):
+			var face_vertices = _get_vertices_for_face(face, world_pos)
+			# Add vertices
+			for vertex in face_vertices:
+				vertices.push_back(vertex)
+				normals.push_back(_get_normal_for_face(face))
+			
+			# Add UVs
+			for _i in range(6):
+				uvs.push_back(Vector2(float(_i > 2), float(_i % 3 == 0)))
 
 func _should_add_face(pos: Vector3, chunk_data: ChunkData) -> bool:
-	# Check if position is outside chunk bounds
 	if pos.x < 0 or pos.y < 0 or pos.z < 0 or \
 	   pos.x >= ChunkData.CHUNK_SIZE or pos.y >= ChunkData.CHUNK_SIZE or pos.z >= ChunkData.CHUNK_SIZE:
 		return true
-	
-	# Face should be added if neighbor is air
 	return chunk_data.get_voxel(pos) == VoxelTypes.Type.AIR
 
-func _add_face(pos: Vector3, face: String, st: SurfaceTool, voxel_type: VoxelTypes.Type) -> void:
-	var base_pos = pos * VOXEL_SIZE
-	var vertices = _get_face_vertices(base_pos, face)
-	var face_normal = FACE_DIRECTIONS[face]
-	var uvs = _get_face_uvs()
-	
-	# Add vertices for face triangles
-	for i in range(6):  # 2 triangles = 6 vertices
-		st.set_normal(face_normal)
-		st.set_uv(uvs[i])
-		st.add_vertex(vertices[i])
-
-func _get_face_vertices(pos: Vector3, face: String) -> Array:
-	match face:
-		"top":
-			return [
-				pos + Vector3(0, 1, 0), pos + Vector3(1, 1, 0), pos + Vector3(1, 1, 1),
-				pos + Vector3(0, 1, 0), pos + Vector3(1, 1, 1), pos + Vector3(0, 1, 1)
-			]
-		"bottom":
-			return [
-				pos + Vector3(0, 0, 1), pos + Vector3(1, 0, 1), pos + Vector3(1, 0, 0),
-				pos + Vector3(0, 0, 1), pos + Vector3(1, 0, 0), pos + Vector3(0, 0, 0)
-			]
-		"right":
-			return [
-				pos + Vector3(1, 0, 0), pos + Vector3(1, 1, 0), pos + Vector3(1, 1, 1),
-				pos + Vector3(1, 0, 0), pos + Vector3(1, 1, 1), pos + Vector3(1, 0, 1)
-			]
-		"left":
-			return [
-				pos + Vector3(0, 0, 1), pos + Vector3(0, 1, 1), pos + Vector3(0, 1, 0),
-				pos + Vector3(0, 0, 1), pos + Vector3(0, 1, 0), pos + Vector3(0, 0, 0)
-			]
-		"front":
-			return [
-				pos + Vector3(0, 0, 1), pos + Vector3(1, 0, 1), pos + Vector3(1, 1, 1),
-				pos + Vector3(0, 0, 1), pos + Vector3(1, 1, 1), pos + Vector3(0, 1, 1)
-			]
-		"back":
-			return [
-				pos + Vector3(1, 0, 0), pos + Vector3(0, 0, 0), pos + Vector3(0, 1, 0),
-				pos + Vector3(1, 0, 0), pos + Vector3(0, 1, 0), pos + Vector3(1, 1, 0)
-			]
-	return []
-
-func _get_face_uvs() -> Array:
-	return [
-		Vector2(0, 0), Vector2(1, 0), Vector2(1, 1),
-		Vector2(0, 0), Vector2(1, 1), Vector2(0, 1)
-	]
-
 func _add_collision(mesh_instance: MeshInstance3D) -> void:
-	var body := StaticBody3D.new()
-	var collision_shape := CollisionShape3D.new()
-	var mesh_faces := mesh_instance.mesh.get_faces()
+	var body = StaticBody3D.new()
+	var shape = ConcavePolygonShape3D.new()
+	var collision_shape = CollisionShape3D.new()
 	
-	if mesh_faces.size() > 0:
-		var shape := ConcavePolygonShape3D.new()
-		shape.set_faces(mesh_faces)
-		collision_shape.shape = shape
-		body.add_child(collision_shape)
-		mesh_instance.add_child(body)
+	shape.set_faces(mesh_instance.mesh.get_faces())
+	collision_shape.shape = shape
+	body.add_child(collision_shape)
+	mesh_instance.add_child(body)

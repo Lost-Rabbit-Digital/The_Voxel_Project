@@ -19,3 +19,4 @@ func set_voxel(local_pos: Vector3, type: VoxelTypes.Type) -> void:
 
 func get_voxel(local_pos: Vector3) -> VoxelTypes.Type:
 	return voxels.get(local_pos, VoxelTypes.Type.AIR)
+	

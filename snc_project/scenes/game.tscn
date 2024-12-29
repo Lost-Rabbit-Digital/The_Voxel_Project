@@ -19,7 +19,7 @@ sky = SubResource("Sky_lbhrr")
 ambient_light_source = 3
 reflected_light_source = 2
 
-[node name="Node3D" type="Node3D"]
+[node name="GameWorld" type="Node3D"]
 script = ExtResource("1_lbhrr")
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="."]
