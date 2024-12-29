@@ -183,8 +183,9 @@ func build_mesh(chunk_data: ChunkData) -> MeshInstance3D:
 		print("No vertices added to mesh")
 		return null
 	
-	# Generate normals and create the mesh
-	surface_tool.generate_normals()
+	# IMPORTANT: Remove this line - we don't want to generate smooth normals
+	# surface_tool.generate_normals()
+	
 	surface_tool.index()
 	
 	var array_mesh := surface_tool.commit()
@@ -196,7 +197,13 @@ func build_mesh(chunk_data: ChunkData) -> MeshInstance3D:
 	if not material:
 		printerr("Failed to get material")
 		return null
-		
+	
+	# Adjust material settings for sharper shading
+	material.roughness = 1.0
+	material.metallic = 0.0
+	material.metallic_specular = 0.0
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_PER_VERTEX
+	
 	array_mesh.surface_set_material(0, material)
 	
 	var mesh_instance := MeshInstance3D.new()
@@ -264,11 +271,9 @@ func _add_voxel_faces(world_pos: Vector3, chunk_pos: Vector3, voxel_type: int, c
 		var check_pos = chunk_pos + face.check_dir
 		
 		if _should_add_face(check_pos, chunk_data):
-			var uvs = _get_face_uvs(face_name, voxel_type)
-			
 			# Add vertices for the face
 			for i in range(face.vertices.size()):
-				# Set normal and UV before adding vertex
+				# Important: DON'T interpolate normals - use exact face normal
 				surface_tool.set_normal(face.normal)
-				surface_tool.set_uv(uvs[i])  # Use corresponding UV for each vertex
+				surface_tool.set_uv(_uv_arrays.default[i])
 				surface_tool.add_vertex(face.vertices[i] + world_pos)
