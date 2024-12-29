@@ -3,6 +3,7 @@ class_name ChunkMeshBuilder
 extends Resource
 
 const VOXEL_SIZE: float = 1.0
+var _neighbor_cache: Dictionary = {}
 
 # Face normals as simple Vector3 constants
 const NORMAL_TOP := Vector3(0, 1, 0)
@@ -11,6 +12,13 @@ const NORMAL_NORTH := Vector3(0, 0, 1)
 const NORMAL_SOUTH := Vector3(0, 0, -1)
 const NORMAL_EAST := Vector3(1, 0, 0)
 const NORMAL_WEST := Vector3(-1, 0, 0)
+
+const UV_LOOKUP = {
+	VoxelTypes.Type.DIRT: Vector2(0, 0),
+	VoxelTypes.Type.STONE: Vector2(1, 0),
+	VoxelTypes.Type.GRASS: Vector2(2, 0),
+	VoxelTypes.Type.METAL: Vector2(3, 0)
+}
 
 var material_factory: MaterialFactory
 var chunk_manager: ChunkManager
@@ -84,36 +92,51 @@ func _get_normal_for_face(face: String) -> Vector3:
 	return Vector3.ZERO
 
 func build_mesh(chunk_data: ChunkData) -> MeshInstance3D:
-	var arrays = []
-	arrays.resize(Mesh.ARRAY_MAX)
+	# Use surface tool for better performance
+	var st = SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	
-	var vertices = PackedVector3Array()
-	var normals = PackedVector3Array()
-	var uvs = PackedVector2Array()
+	var vertex_count = 0
 	
+	# Process voxels
 	for pos in chunk_data.voxels:
 		var voxel_type = chunk_data.get_voxel(pos)
 		if voxel_type == VoxelTypes.Type.AIR:
 			continue
-		
-		_add_voxel_faces(pos, chunk_data, vertices, normals, uvs)
+			
+		# Add faces to surface tool
+		for face in ["top", "bottom", "north", "south", "east", "west"]:
+			var check_pos = pos + _get_normal_for_face(face)
+			if _should_add_face(check_pos, chunk_data):
+				var face_vertices = _get_vertices_for_face(face, pos * VOXEL_SIZE)
+				var face_normal = _get_normal_for_face(face)
+				var face_uvs = _get_face_uvs(face, voxel_type)
+				
+				# Add vertices to surface tool using correct method names
+				for i in range(face_vertices.size()):
+					st.set_normal(face_normal)
+					st.set_uv(face_uvs[i])
+					st.add_vertex(face_vertices[i])
+					vertex_count += 1
 	
-	if vertices.size() == 0:
+	if vertex_count == 0:
 		return null
 	
-	arrays[Mesh.ARRAY_VERTEX] = vertices
-	arrays[Mesh.ARRAY_NORMAL] = normals
-	arrays[Mesh.ARRAY_TEX_UV] = uvs
+	# Generate normals and tangents
+	st.generate_normals()
+	st.generate_tangents()
 	
-	var mesh = ArrayMesh.new()
-	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	# Create mesh from surface tool
+	var mesh = st.commit()
 	
+	# Apply material
 	var material = material_factory.get_material_for_type(VoxelTypes.Type.STONE)
 	material.shading_mode = BaseMaterial3D.SHADING_MODE_PER_VERTEX
 	material.cull_mode = BaseMaterial3D.CULL_BACK
 	material.vertex_color_use_as_albedo = true
 	mesh.surface_set_material(0, material)
 	
+	# Create mesh instance
 	var mesh_instance = MeshInstance3D.new()
 	mesh_instance.mesh = mesh
 	mesh_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
@@ -123,6 +146,28 @@ func build_mesh(chunk_data: ChunkData) -> MeshInstance3D:
 	return mesh_instance
 
 func _should_add_face(pos: Vector3, chunk_data: ChunkData) -> bool:
+	# Quick bounds check
+	if pos.x < 0 or pos.x >= ChunkData.CHUNK_SIZE or \
+	   pos.y < 0 or pos.y >= ChunkData.CHUNK_SIZE or \
+	   pos.z < 0 or pos.z >= ChunkData.CHUNK_SIZE:
+		
+		# Convert to world position
+		var world_pos = chunk_data.local_to_world(pos)
+		var chunk_pos = chunk_manager.get_chunk_position(world_pos)
+		
+		# Use cached chunk if available
+		if not chunk_pos in _neighbor_cache:
+			_neighbor_cache[chunk_pos] = chunk_manager.get_chunk_at_position(world_pos)
+			
+		var neighbor_chunk = _neighbor_cache[chunk_pos]
+		if neighbor_chunk:
+			var local_pos = neighbor_chunk.world_to_local(world_pos)
+			return neighbor_chunk.get_voxel(local_pos) == VoxelTypes.Type.AIR
+			
+		return true
+	
+	# Inside current chunk, add face only if neighbor is air
+	return chunk_data.get_voxel(pos) == VoxelTypes.Type.AIR
 	# Check if the position is outside the current chunk bounds
 	if pos.x < 0 or pos.x >= ChunkData.CHUNK_SIZE or \
 	   pos.y < 0 or pos.y >= ChunkData.CHUNK_SIZE or \
@@ -144,47 +189,31 @@ func _should_add_face(pos: Vector3, chunk_data: ChunkData) -> bool:
 	# Inside current chunk, add face only if neighbor is air
 	return chunk_data.get_voxel(pos) == VoxelTypes.Type.AIR
 
+func clear_neighbor_cache() -> void:
+	_neighbor_cache.clear()
+	
 func _get_face_uvs(face: String, voxel_type: VoxelTypes.Type) -> PackedVector2Array:
 	var uvs = PackedVector2Array()
+	uvs.resize(6)  # Pre-allocate for 6 vertices
 	
-	# UV coordinates for a single tile in the texture atlas
-	var uv_size = 1.0/16.0  # Assuming 16x16 texture grid
+	# Use pre-calculated UV coordinates
+	var base_uv = UV_LOOKUP[voxel_type]
+	var uv_size = 1.0/16.0
 	
-	# Get UV offset based on voxel type (you can customize this)
-	var uv_x = 0
-	var uv_y = 0
-	
-	match voxel_type:
-		VoxelTypes.Type.DIRT:
-			uv_x = 0
-			uv_y = 0
-		VoxelTypes.Type.STONE:
-			uv_x = 1
-			uv_y = 0
-		VoxelTypes.Type.GRASS:
-			uv_x = 2
-			uv_y = 0
-		VoxelTypes.Type.METAL:
-			uv_x = 3
-			uv_y = 0
-	
-	# Calculate UV coordinates
-	var u1 = uv_x * uv_size
-	var v1 = uv_y * uv_size
+	var u1 = base_uv.x * uv_size
+	var v1 = base_uv.y * uv_size
 	var u2 = u1 + uv_size
 	var v2 = v1 + uv_size
 	
-	# Add UVs in the correct order for the triangles
-	uvs.push_back(Vector2(u1, v2))  # Bottom-left
-	uvs.push_back(Vector2(u2, v2))  # Bottom-right
-	uvs.push_back(Vector2(u2, v1))  # Top-right
-	
-	uvs.push_back(Vector2(u1, v2))  # Bottom-left
-	uvs.push_back(Vector2(u2, v1))  # Top-right
-	uvs.push_back(Vector2(u1, v1))  # Top-left
+	# Direct array access is faster than push_back
+	uvs[0] = Vector2(u1, v2)
+	uvs[1] = Vector2(u2, v2)
+	uvs[2] = Vector2(u2, v1)
+	uvs[3] = Vector2(u1, v2)
+	uvs[4] = Vector2(u2, v1)
+	uvs[5] = Vector2(u1, v1)
 	
 	return uvs
-
 func _add_voxel_faces(pos: Vector3, chunk_data: ChunkData, vertices: PackedVector3Array, normals: PackedVector3Array, uvs: PackedVector2Array) -> void:
 	var world_pos = pos * VOXEL_SIZE
 	var voxel_type = chunk_data.get_voxel(pos)

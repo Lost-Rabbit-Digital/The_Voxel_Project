@@ -2,8 +2,9 @@ class_name ChunkManager
 extends Node3D
 
 const RENDER_DISTANCE_HORIZONTAL := 4
-const RENDER_DISTANCE_VERTICAL := 2
-const MAX_CHUNKS_PER_FRAME := 2  # Limit chunks generated per frame
+const RENDER_DISTANCE_VERTICAL := 4
+const MAX_CHUNKS_PER_FRAME := 12  # Limit chunks generated per frame
+const CHUNK_GENERATION_BATCH_SIZE = 4  # Process multiple chunks per thread iteration
 
 var terrain_generator: TerrainGenerator
 var mesh_builder: ChunkMeshBuilder
@@ -55,7 +56,73 @@ func _exit_tree() -> void:
 	
 	# Clean old cache files
 	chunk_cache.clean_cache()
+	
 func _thread_function() -> void:
+	while thread_running:
+		mutex.lock()
+		var current_queue = chunk_generation_queue.slice(0, CHUNK_GENERATION_BATCH_SIZE - 1)
+		chunk_generation_queue = chunk_generation_queue.slice(CHUNK_GENERATION_BATCH_SIZE)
+		mutex.unlock()
+		
+		var batch_results = []
+		for chunk_pos in current_queue:
+			if not thread_running:
+				break
+				
+			if chunk_pos in active_chunks:
+				continue
+			
+			# Try loading from cache first
+			var chunk_data = chunk_cache.load_chunk(chunk_pos)
+			
+			# Generate new chunk if not cached
+			if not chunk_data:
+				chunk_data = terrain_generator.generate_chunk_data(chunk_pos)
+			
+			if chunk_data:
+				batch_results.append({"pos": chunk_pos, "data": chunk_data})
+		
+		if not batch_results.is_empty():
+			mutex.lock()
+			chunks_to_add.append_array(batch_results)
+			mutex.unlock()
+		
+		OS.delay_msec(5)  # Small delay to prevent thread from hogging CPU
+	
+	var thread_pool = []
+	var max_threads = max(1, OS.get_processor_count() - 1)  # Leave one core free
+	
+	while thread_running:
+		mutex.lock()
+		var current_queue = chunk_generation_queue.slice(0, CHUNK_GENERATION_BATCH_SIZE - 1)
+		chunk_generation_queue = chunk_generation_queue.slice(CHUNK_GENERATION_BATCH_SIZE)
+		mutex.unlock()
+		
+		var batch_results = []
+		for chunk_pos in current_queue:
+			if not thread_running:
+				break
+				
+			if chunk_pos in active_chunks:
+				continue
+			
+			# Try loading from cache with timeout
+			var start_time = Time.get_ticks_msec()
+			var chunk_data = chunk_cache.load_chunk(chunk_pos)
+			
+			if not chunk_data and Time.get_ticks_msec() - start_time < 50:  # 50ms timeout
+				chunk_data = terrain_generator.generate_chunk_data(chunk_pos)
+			
+			if chunk_data:
+				batch_results.append({"pos": chunk_pos, "data": chunk_data})
+		
+		if not batch_results.is_empty():
+			mutex.lock()
+			chunks_to_add.append_array(batch_results)
+			mutex.unlock()
+		
+		OS.delay_msec(5)  # Reduced delay for better responsiveness
+
 	while thread_running:
 		mutex.lock()
 		var current_queue = chunk_generation_queue.duplicate()
@@ -81,6 +148,7 @@ func _thread_function() -> void:
 			mutex.unlock()
 			
 			OS.delay_msec(1)  # Prevent thread from hogging CPU
+
 func _process(_delta: float) -> void:
 	# Process queued chunks
 	mutex.lock()
@@ -108,30 +176,29 @@ func update_chunks(center_pos: Vector3) -> void:
 	
 	last_center_chunk = chunk_pos
 	
-	# Calculate needed chunks
-	var needed_chunks := {}
+	# Calculate needed chunks and their distances
+	var chunks_to_generate = []
 	for x in range(-RENDER_DISTANCE_HORIZONTAL, RENDER_DISTANCE_HORIZONTAL + 1):
 		for y in range(-RENDER_DISTANCE_VERTICAL, RENDER_DISTANCE_VERTICAL + 1):
 			for z in range(-RENDER_DISTANCE_HORIZONTAL, RENDER_DISTANCE_HORIZONTAL + 1):
 				var new_chunk_pos = chunk_pos + Vector3(x, y, z)
-				if new_chunk_pos.distance_to(chunk_pos) <= RENDER_DISTANCE_HORIZONTAL:
-					needed_chunks[new_chunk_pos] = true
+				var distance = new_chunk_pos.distance_to(chunk_pos)
+				if distance <= RENDER_DISTANCE_HORIZONTAL:
+					chunks_to_generate.append({
+						"pos": new_chunk_pos,
+						"distance": distance
+					})
+	
+	# Sort by distance
+	chunks_to_generate.sort_custom(func(a, b): return a.distance < b.distance)
 	
 	# Queue new chunks for generation
 	mutex.lock()
-	for new_pos in needed_chunks:
+	for chunk in chunks_to_generate:
+		var new_pos = chunk.pos
 		if not active_chunks.has(new_pos) and not new_pos in chunk_generation_queue:
 			chunk_generation_queue.append(new_pos)
 	mutex.unlock()
-	
-	# Remove far chunks
-	var to_remove := []
-	for existing_pos in active_chunks:
-		if not needed_chunks.has(existing_pos):
-			to_remove.append(existing_pos)
-	
-	for pos in to_remove:
-		remove_chunk(pos)
 
 func _finalize_chunk(chunk_pos: Vector3, chunk_data: ChunkData) -> void:
 	if chunk_pos in active_chunks:
@@ -188,10 +255,10 @@ func create_chunk(chunk_pos: Vector3) -> void:
 func remove_chunk(chunk_pos: Vector3) -> void:
 	if chunk_pos in active_chunks:
 		var chunk = active_chunks[chunk_pos]
-		# Save chunk to cache before removing
 		chunk_cache.save_chunk(chunk_pos, chunk.data)
 		chunk.mesh.queue_free()
 		active_chunks.erase(chunk_pos)
+		mesh_builder.clear_neighbor_cache() # Add this line
 		if debug_enabled:
 			print("Removed chunk at: ", chunk_pos)
 
