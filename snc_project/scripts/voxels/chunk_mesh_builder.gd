@@ -16,52 +16,59 @@ var material_factory: MaterialFactory
 
 func _init(mat_factory: MaterialFactory) -> void:
 	material_factory = mat_factory
-
+	
 func _get_vertices_for_face(face: String, base_pos: Vector3) -> PackedVector3Array:
 	var vertices = PackedVector3Array()
+	
+	# Common vertices for a quad (2 triangles)
+	var v0: Vector3
+	var v1: Vector3
+	var v2: Vector3
+	var v3: Vector3
+	
 	match face:
 		"top":
-			vertices.push_back(base_pos + Vector3(0, 1, 0))
-			vertices.push_back(base_pos + Vector3(1, 1, 0))
-			vertices.push_back(base_pos + Vector3(1, 1, 1))
-			vertices.push_back(base_pos + Vector3(0, 1, 0))
-			vertices.push_back(base_pos + Vector3(1, 1, 1))
-			vertices.push_back(base_pos + Vector3(0, 1, 1))
+			# Counter-clockwise when viewed from above (looking down -Y)
+			v0 = base_pos + Vector3(0, 1, 0)  # Front-left
+			v1 = base_pos + Vector3(1, 1, 0)  # Front-right
+			v2 = base_pos + Vector3(1, 1, 1)  # Back-right
+			v3 = base_pos + Vector3(0, 1, 1)  # Back-left
 		"bottom":
-			vertices.push_back(base_pos + Vector3(0, 0, 1))
-			vertices.push_back(base_pos + Vector3(1, 0, 1))
-			vertices.push_back(base_pos + Vector3(1, 0, 0))
-			vertices.push_back(base_pos + Vector3(0, 0, 1))
-			vertices.push_back(base_pos + Vector3(1, 0, 0))
-			vertices.push_back(base_pos + Vector3(0, 0, 0))
-		"north":
-			vertices.push_back(base_pos + Vector3(0, 0, 1))
-			vertices.push_back(base_pos + Vector3(1, 0, 1))
-			vertices.push_back(base_pos + Vector3(1, 1, 1))
-			vertices.push_back(base_pos + Vector3(0, 0, 1))
-			vertices.push_back(base_pos + Vector3(1, 1, 1))
-			vertices.push_back(base_pos + Vector3(0, 1, 1))
-		"south":
-			vertices.push_back(base_pos + Vector3(0, 0, 0))
-			vertices.push_back(base_pos + Vector3(0, 1, 0))
-			vertices.push_back(base_pos + Vector3(1, 1, 0))
-			vertices.push_back(base_pos + Vector3(0, 0, 0))
-			vertices.push_back(base_pos + Vector3(1, 1, 0))
-			vertices.push_back(base_pos + Vector3(1, 0, 0))
-		"east":
-			vertices.push_back(base_pos + Vector3(1, 0, 0))
-			vertices.push_back(base_pos + Vector3(1, 1, 0))
-			vertices.push_back(base_pos + Vector3(1, 1, 1))
-			vertices.push_back(base_pos + Vector3(1, 0, 0))
-			vertices.push_back(base_pos + Vector3(1, 1, 1))
-			vertices.push_back(base_pos + Vector3(1, 0, 1))
-		"west":
-			vertices.push_back(base_pos + Vector3(0, 0, 0))
-			vertices.push_back(base_pos + Vector3(0, 0, 1))
-			vertices.push_back(base_pos + Vector3(0, 1, 1))
-			vertices.push_back(base_pos + Vector3(0, 0, 0))
-			vertices.push_back(base_pos + Vector3(0, 1, 1))
-			vertices.push_back(base_pos + Vector3(0, 1, 0))
+			# Counter-clockwise when viewed from below (looking up +Y)
+			v0 = base_pos + Vector3(0, 0, 1)  # Back-left
+			v1 = base_pos + Vector3(1, 0, 1)  # Back-right
+			v2 = base_pos + Vector3(1, 0, 0)  # Front-right
+			v3 = base_pos + Vector3(0, 0, 0)  # Front-left
+		"north": # +Z face
+			v0 = base_pos + Vector3(0, 0, 1)  # Bottom-left
+			v1 = base_pos + Vector3(0, 1, 1)  # Top-left
+			v2 = base_pos + Vector3(1, 1, 1)  # Top-right
+			v3 = base_pos + Vector3(1, 0, 1)  # Bottom-right
+		"south": # -Z face
+			v0 = base_pos + Vector3(1, 0, 0)  # Bottom-left
+			v1 = base_pos + Vector3(1, 1, 0)  # Top-left
+			v2 = base_pos + Vector3(0, 1, 0)  # Top-right
+			v3 = base_pos + Vector3(0, 0, 0)  # Bottom-right
+		"east": # +X face
+			v0 = base_pos + Vector3(1, 0, 1)  # Bottom-left
+			v1 = base_pos + Vector3(1, 1, 1)  # Top-left
+			v2 = base_pos + Vector3(1, 1, 0)  # Top-right
+			v3 = base_pos + Vector3(1, 0, 0)  # Bottom-right
+		"west": # -X face
+			v0 = base_pos + Vector3(0, 0, 0)  # Bottom-left
+			v1 = base_pos + Vector3(0, 1, 0)  # Top-left
+			v2 = base_pos + Vector3(0, 1, 1)  # Top-right
+			v3 = base_pos + Vector3(0, 0, 1)  # Bottom-right
+	
+	# Create triangles with correct winding order
+	vertices.push_back(v0)  # First triangle
+	vertices.push_back(v1)
+	vertices.push_back(v2)
+	
+	vertices.push_back(v0)  # Second triangle
+	vertices.push_back(v2)
+	vertices.push_back(v3)
+	
 	return vertices
 
 func _get_normal_for_face(face: String) -> Vector3:
@@ -82,40 +89,48 @@ func build_mesh(chunk_data: ChunkData) -> MeshInstance3D:
 	var normals = PackedVector3Array()
 	var uvs = PackedVector2Array()
 	
-	# Process each voxel
 	for pos in chunk_data.voxels:
 		var voxel_type = chunk_data.get_voxel(pos)
 		if voxel_type == VoxelTypes.Type.AIR:
 			continue
-			
+		
 		_add_voxel_faces(pos, chunk_data, vertices, normals, uvs)
 	
-	# If no vertices were generated, return null
 	if vertices.size() == 0:
 		return null
 	
-	# Create arrays
 	arrays[Mesh.ARRAY_VERTEX] = vertices
 	arrays[Mesh.ARRAY_NORMAL] = normals
 	arrays[Mesh.ARRAY_TEX_UV] = uvs
 	
-	# Create mesh
 	var mesh = ArrayMesh.new()
 	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
 	
-	# Setup material
 	var material = material_factory.get_material_for_type(VoxelTypes.Type.STONE)
 	material.shading_mode = BaseMaterial3D.SHADING_MODE_PER_VERTEX
 	material.cull_mode = BaseMaterial3D.CULL_BACK
+	material.vertex_color_use_as_albedo = true
 	mesh.surface_set_material(0, material)
 	
-	# Create mesh instance
 	var mesh_instance = MeshInstance3D.new()
 	mesh_instance.mesh = mesh
 	mesh_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+	mesh_instance.gi_mode = GeometryInstance3D.GI_MODE_DYNAMIC
 	
 	_add_collision(mesh_instance)
 	return mesh_instance
+
+func _should_add_face(pos: Vector3, chunk_data: ChunkData) -> bool:
+	# First check if we're at a chunk boundary
+	if pos.x < 0 or pos.y < 0 or pos.z < 0 or \
+	   pos.x >= ChunkData.CHUNK_SIZE or pos.y >= ChunkData.CHUNK_SIZE or pos.z >= ChunkData.CHUNK_SIZE:
+		# For chunk boundaries, we need to get the voxel from the neighboring chunk
+		# For now, we'll show faces at chunk boundaries until we implement chunk loading
+		return true
+	
+	# Inside the chunk, check if the neighbor is air
+	var neighbor_type = chunk_data.get_voxel(pos)
+	return neighbor_type == VoxelTypes.Type.AIR
 
 func _add_voxel_faces(pos: Vector3, chunk_data: ChunkData, vertices: PackedVector3Array, normals: PackedVector3Array, uvs: PackedVector2Array) -> void:
 	var world_pos = pos * VOXEL_SIZE
@@ -124,20 +139,21 @@ func _add_voxel_faces(pos: Vector3, chunk_data: ChunkData, vertices: PackedVecto
 		var check_pos = pos + _get_normal_for_face(face)
 		if _should_add_face(check_pos, chunk_data):
 			var face_vertices = _get_vertices_for_face(face, world_pos)
-			# Add vertices
+			var normal = _get_normal_for_face(face)
+			
 			for vertex in face_vertices:
 				vertices.push_back(vertex)
-				normals.push_back(_get_normal_for_face(face))
+				normals.push_back(normal)
 			
-			# Add UVs
-			for _i in range(6):
-				uvs.push_back(Vector2(float(_i > 2), float(_i % 3 == 0)))
-
-func _should_add_face(pos: Vector3, chunk_data: ChunkData) -> bool:
-	if pos.x < 0 or pos.y < 0 or pos.z < 0 or \
-	   pos.x >= ChunkData.CHUNK_SIZE or pos.y >= ChunkData.CHUNK_SIZE or pos.z >= ChunkData.CHUNK_SIZE:
-		return true
-	return chunk_data.get_voxel(pos) == VoxelTypes.Type.AIR
+			# Add UVs for this face
+			uvs.append_array([
+				Vector2(0, 0),  # First triangle
+				Vector2(1, 0),
+				Vector2(1, 1),
+				Vector2(0, 0),  # Second triangle
+				Vector2(1, 1),
+				Vector2(0, 1)
+			])
 
 func _add_collision(mesh_instance: MeshInstance3D) -> void:
 	var body = StaticBody3D.new()

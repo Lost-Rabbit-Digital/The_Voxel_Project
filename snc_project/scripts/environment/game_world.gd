@@ -1,20 +1,19 @@
 extends Node3D
 
 @onready var chunk_manager: ChunkManager = $ChunkManager
+@onready var camera: Camera3D = $Camera3D
 
 func _ready() -> void:
-	# Create initial chunks around origin
-	for x in range(-2, 3):
-		for z in range(-2, 3):
-			chunk_manager.create_chunk(Vector3(x, 0, z))
+	# Initialize the world with a controlled number of chunks
+	chunk_manager.generate_initial_chunks()
 
-func _on_player_moved(new_position: Vector3) -> void:
-	# Convert player position to chunk coordinates
-	var chunk_pos = Vector3(
-		floor(new_position.x / ChunkData.CHUNK_SIZE),
-		floor(new_position.y / ChunkData.CHUNK_SIZE),
-		floor(new_position.z / ChunkData.CHUNK_SIZE)
+func _process(_delta: float) -> void:
+	# Get camera position in chunk coordinates
+	var camera_chunk_pos = Vector3(
+		floor(camera.position.x / ChunkData.CHUNK_SIZE),
+		floor(camera.position.y / ChunkData.CHUNK_SIZE),
+		floor(camera.position.z / ChunkData.CHUNK_SIZE)
 	)
 	
-	# Load new chunks as needed
-	chunk_manager.create_chunk(chunk_pos)
+	# Update chunk visibility based on camera position
+	chunk_manager.update_chunk_visibility(camera_chunk_pos)
