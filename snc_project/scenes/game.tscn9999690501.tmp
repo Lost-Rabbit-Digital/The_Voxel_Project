@@ -1,0 +1,36 @@
+[gd_scene load_steps=6 format=3 uid="uid://yrxglwcwsqfy"]
+
+[ext_resource type="Script" uid="uid://bwnqknka1yyjj" path="res://scripts/voxels/voxel_manager.gd" id="1_uwrxv"]
+[ext_resource type="Script" uid="uid://gyeamovgi5ef" path="res://scripts/interaction/editor_style_camera.gd" id="2_yqjtg"]
+
+[sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_lnu2h"]
+sky_top_color = Color(0.105882, 0.294118, 0.556863, 1)
+sky_horizon_color = Color(1, 0.676945, 0.54883, 1)
+ground_bottom_color = Color(0.0116433, 0.0703067, 0.165667, 1)
+ground_horizon_color = Color(1, 0.678431, 0.54902, 1)
+
+[sub_resource type="Sky" id="Sky_lbhrr"]
+sky_material = SubResource("ProceduralSkyMaterial_lnu2h")
+
+[sub_resource type="Environment" id="Environment_lnu2h"]
+background_mode = 2
+sky = SubResource("Sky_lbhrr")
+ambient_light_source = 3
+reflected_light_source = 2
+
+[node name="Node3D" type="Node3D"]
+
+[node name="VoxelManager" type="Node3D" parent="."]
+script = ExtResource("1_uwrxv")
+
+[node name="Camera3D" type="Camera3D" parent="."]
+transform = Transform3D(0.707107, 0, 0.707107, 0, 1, 0, -0.707107, 0, 0.707107, 20, 20, 20)
+script = ExtResource("2_yqjtg")
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.698678, -0.492456, 0.518977, 0, 0.725398, 0.688329, -0.715437, -0.48092, 0.50682, 0, 0, 0)
+shadow_enabled = true
+directional_shadow_mode = 0
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_lnu2h")

@@ -116,28 +116,63 @@ func _generate_terrain_data(chunk_pos: Vector3) -> void:
 					}
 
 func _create_optimized_chunk_mesh() -> void:
-	# Skip if no voxels to render
 	if active_voxels.is_empty():
 		if debug_enabled:
 			print("No voxels to render in chunk")
 		return
 		
-	var st = SurfaceTool.new()
+	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	
-	# Set material before adding vertices
+	# Set material with proper lighting parameters
 	var material = voxel_materials[VoxelType.STONE]
 	material.cull_mode = BaseMaterial3D.CULL_BACK
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_PER_VERTEX
+	material.vertex_color_use_as_albedo = false
+	material.roughness = 0.7
+	material.metallic = 0.0
 	st.set_material(material)
 	
-	# Track if we've added any faces
-	var faces_added := false
-	
 	# Process each voxel
+	var faces_added := false
 	for pos in active_voxels:
-		var voxel = active_voxels[pos]
 		if _add_visible_faces_st(pos, st):
 			faces_added = true
+	
+	if not faces_added:
+		if debug_enabled:
+			print("No visible faces in chunk")
+		return
+	
+	# Generate normals and create mesh
+	st.generate_normals()
+	st.generate_tangents()
+	
+	var mesh := st.commit()
+	if not mesh or mesh.get_surface_count() == 0:
+		if debug_enabled:
+			print("Failed to create valid mesh")
+		return
+		
+	# Create mesh instance with proper lighting settings
+	var instance := MeshInstance3D.new()
+	instance.mesh = mesh
+	instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+	instance.gi_mode = GeometryInstance3D.GI_MODE_DYNAMIC
+	instance.visibility_range_end = 100.0  # Adjust based on your needs
+	
+	# Create collision
+	var body := StaticBody3D.new()
+	var collision_node := CollisionShape3D.new()
+	var mesh_faces := mesh.get_faces()
+	if mesh_faces.size() > 0:
+		var collision_shape := ConcavePolygonShape3D.new()
+		collision_shape.set_faces(mesh_faces)
+		collision_node.shape = collision_shape
+		body.add_child(collision_node)
+		instance.add_child(body)
+	
+	chunk_node.add_child(instance)
 	
 	# Only create mesh if we have faces to render
 	if not faces_added:
