@@ -1,10 +1,14 @@
 class_name ChunkManager
 extends Node3D
 
-const RENDER_DISTANCE_HORIZONTAL := 2
+const RENDER_DISTANCE_HORIZONTAL := 4
 const RENDER_DISTANCE_VERTICAL := 2
 const MAX_CHUNKS_PER_FRAME := 4  # Limit chunks generated per frame
 const CHUNK_GENERATION_BATCH_SIZE = 2  # Process multiple chunks per thread iteration
+
+var chunk_retry_queue: Array[Dictionary] = []
+const MAX_RETRY_ATTEMPTS := 3
+const CHUNK_TIMEOUT_MS := 100 
 
 var terrain_generator: TerrainGenerator
 var mesh_builder: ChunkMeshBuilder
@@ -72,11 +76,11 @@ func _thread_function() -> void:
 			if chunk_pos in active_chunks:
 				continue
 			
-			# Try loading from cache with timeout
-			var start_time = Time.get_ticks_msec()
+			# Try to load from cache first
 			var chunk_data = chunk_cache.load_chunk(chunk_pos)
 			
-			if not chunk_data and Time.get_ticks_msec() - start_time < 50:  # 50ms timeout
+			# If not in cache, generate new
+			if not chunk_data:
 				chunk_data = terrain_generator.generate_chunk_data(chunk_pos)
 			
 			if chunk_data:
@@ -84,25 +88,39 @@ func _thread_function() -> void:
 					"pos": chunk_pos,
 					"data": chunk_data
 				})
+			else:
+				# If generation failed, re-queue with lower priority
+				mutex.lock()
+				chunk_generation_queue.append(chunk_pos)
+				mutex.unlock()
 		
 		if not batch_results.is_empty():
 			mutex.lock()
 			chunks_to_add.append_array(batch_results)
 			mutex.unlock()
 		
-		OS.delay_msec(5)  # Small delay to prevent thread from hogging CPU
+		OS.delay_msec(5)
 
 func _process(_delta: float) -> void:
+	# Clean up expired retry attempts
+	chunk_retry_queue = chunk_retry_queue.filter(func(chunk): return chunk.retries < MAX_RETRY_ATTEMPTS)
+	
 	# Process queued chunks
 	mutex.lock()
 	var chunks_to_process = chunks_to_add.duplicate()
 	chunks_to_add.clear()
 	mutex.unlock()
 	
+	# Sort by distance and process
+	chunks_to_process.sort_custom(func(a, b): 
+		var manhattan_dist_a = abs(a.pos.x - last_center_chunk.x) + abs(a.pos.y - last_center_chunk.y) + abs(a.pos.z - last_center_chunk.z)
+		var manhattan_dist_b = abs(b.pos.x - last_center_chunk.x) + abs(b.pos.y - last_center_chunk.y) + abs(b.pos.z - last_center_chunk.z)
+		return manhattan_dist_a < manhattan_dist_b
+	)
+	
 	var chunks_added := 0
 	for chunk_info in chunks_to_process:
 		if chunks_added >= MAX_CHUNKS_PER_FRAME:
-			# Re-queue remaining chunks
 			mutex.lock()
 			chunks_to_add.append_array(chunks_to_process.slice(chunks_added))
 			mutex.unlock()
@@ -110,11 +128,6 @@ func _process(_delta: float) -> void:
 			
 		_finalize_chunk(chunk_info.pos, chunk_info.data)
 		chunks_added += 1
-	
-	# Print debug info every 60 frames
-	if debug_enabled and Engine.get_process_frames() % 60 == 0:
-		print("Active chunks: ", get_active_chunk_count())
-		print("Generation queue size: ", chunk_generation_queue.size())
 
 func update_chunks(center_pos: Vector3) -> void:
 	var chunk_pos = get_chunk_position(center_pos)
@@ -124,31 +137,54 @@ func update_chunks(center_pos: Vector3) -> void:
 		
 	last_center_chunk = chunk_pos
 	
-	# Calculate needed chunks and their distances
-	var needed_chunks := {}
+	# Calculate needed chunks using spherical distance
+	var chunks_to_generate = []
 	for x in range(-RENDER_DISTANCE_HORIZONTAL, RENDER_DISTANCE_HORIZONTAL + 1):
 		for y in range(-RENDER_DISTANCE_VERTICAL, RENDER_DISTANCE_VERTICAL + 1):
 			for z in range(-RENDER_DISTANCE_HORIZONTAL, RENDER_DISTANCE_HORIZONTAL + 1):
 				var new_chunk_pos = chunk_pos + Vector3(x, y, z)
 				var distance = new_chunk_pos.distance_to(chunk_pos)
-				if distance <= RENDER_DISTANCE_HORIZONTAL:
-					needed_chunks[new_chunk_pos] = true
+				
+				# Add a small buffer to ensure complete coverage
+				if distance <= RENDER_DISTANCE_HORIZONTAL + 0.5:
+					chunks_to_generate.append({
+						"pos": new_chunk_pos,
+						"distance": distance
+					})
 	
-	# Remove chunks that are out of range
-	var chunks_to_remove = []
-	for existing_chunk_pos in active_chunks:
+	# Sort by exact distance for more uniform loading
+	chunks_to_generate.sort_custom(func(a, b): return a.distance < b.distance)
+	
+	# Track needed chunks
+	var needed_chunks := {}
+	for chunk in chunks_to_generate:
+		needed_chunks[chunk.pos] = true
+	
+	# Remove out-of-range chunks
+	for existing_chunk_pos in active_chunks.keys():
 		if not needed_chunks.has(existing_chunk_pos):
-			chunks_to_remove.append(existing_chunk_pos)
+			remove_chunk(existing_chunk_pos)
 	
-	# Remove the chunks outside render distance
-	for chunk_pos_to_remove in chunks_to_remove:
-		remove_chunk(chunk_pos_to_remove)
-	
-	# Queue new chunks for generation
+	# Update generation queue
 	mutex.lock()
-	for new_pos in needed_chunks:
-		if not active_chunks.has(new_pos) and not new_pos in chunk_generation_queue:
-			chunk_generation_queue.append(new_pos)
+	chunk_generation_queue.clear()  # Start fresh
+	
+	# First add chunks adjacent to existing chunks
+	for chunk in chunks_to_generate:
+		if not active_chunks.has(chunk.pos):
+			var has_neighbor = false
+			for offset in [Vector3.RIGHT, Vector3.LEFT, Vector3.UP, Vector3.DOWN, Vector3.FORWARD, Vector3.BACK]:
+				if active_chunks.has(chunk.pos + offset):
+					has_neighbor = true
+					break
+			if has_neighbor:
+				chunk_generation_queue.append(chunk.pos)
+	
+	# Then add remaining chunks
+	for chunk in chunks_to_generate:
+		if not active_chunks.has(chunk.pos) and not chunk.pos in chunk_generation_queue:
+			chunk_generation_queue.append(chunk.pos)
+	
 	mutex.unlock()
 
 func _finalize_chunk(chunk_pos: Vector3, chunk_data: ChunkData) -> void:

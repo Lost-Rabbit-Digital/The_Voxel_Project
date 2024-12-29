@@ -1,4 +1,3 @@
-# chunk_cache.gd
 class_name ChunkCache
 extends Resource
 
