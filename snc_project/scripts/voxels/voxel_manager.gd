@@ -68,16 +68,18 @@ func _create_material(color: Color) -> StandardMaterial3D:
 
 func _setup_noise() -> void:
 	noise = FastNoiseLite.new()
-	noise.noise_type = FastNoiseLite.TYPE_SIMPLEX
+	noise.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
 	if use_random_seed:
 		randomize()
 		noise.seed = randi()
 	else:
 		noise.seed = noise_seed
 	noise.frequency = noise_frequency
+	noise.fractal_type = FastNoiseLite.FRACTAL_FBM
 	noise.fractal_octaves = noise_octaves
 	noise.fractal_lacunarity = 2.0
 	noise.fractal_gain = 0.5
+	noise.fractal_weighted_strength = 0.7
 
 func create_chunk(chunk_pos: Vector3) -> void:
 	if chunk_node:
@@ -124,7 +126,9 @@ func _create_optimized_chunk_mesh() -> void:
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	
 	# Set material before adding vertices
-	st.set_material(voxel_materials[VoxelType.STONE])
+	var material = voxel_materials[VoxelType.STONE]
+	material.cull_mode = BaseMaterial3D.CULL_BACK
+	st.set_material(material)
 	
 	# Track if we've added any faces
 	var faces_added := false
@@ -220,33 +224,33 @@ func _get_face_vertices(pos: Vector3, face: String) -> Array:
 	match face:
 		"top":
 			vertices = [
-				pos + Vector3(0, 1, 0), pos + Vector3(1, 1, 0), pos + Vector3(1, 1, 1),
-				pos + Vector3(0, 1, 0), pos + Vector3(1, 1, 1), pos + Vector3(0, 1, 1)
+				pos + Vector3(1, 1, 1), pos + Vector3(0, 1, 1), pos + Vector3(0, 1, 0),
+				pos + Vector3(1, 1, 0), pos + Vector3(1, 1, 1), pos + Vector3(0, 1, 0)
 			]
 		"bottom":
 			vertices = [
-				pos + Vector3(0, 0, 1), pos + Vector3(1, 0, 1), pos + Vector3(1, 0, 0),
-				pos + Vector3(0, 0, 1), pos + Vector3(1, 0, 0), pos + Vector3(0, 0, 0)
+				pos + Vector3(1, 0, 1), pos + Vector3(1, 0, 0), pos + Vector3(0, 0, 0),
+				pos + Vector3(0, 0, 1), pos + Vector3(1, 0, 1), pos + Vector3(0, 0, 0)
 			]
 		"right":
 			vertices = [
-				pos + Vector3(1, 0, 0), pos + Vector3(1, 1, 0), pos + Vector3(1, 1, 1),
-				pos + Vector3(1, 0, 0), pos + Vector3(1, 1, 1), pos + Vector3(1, 0, 1)
+				pos + Vector3(1, 1, 1), pos + Vector3(1, 1, 0), pos + Vector3(1, 0, 0),
+				pos + Vector3(1, 0, 1), pos + Vector3(1, 1, 1), pos + Vector3(1, 0, 0)
 			]
 		"left":
 			vertices = [
-				pos + Vector3(0, 0, 1), pos + Vector3(0, 1, 1), pos + Vector3(0, 1, 0),
-				pos + Vector3(0, 0, 1), pos + Vector3(0, 1, 0), pos + Vector3(0, 0, 0)
+				pos + Vector3(0, 1, 1), pos + Vector3(0, 0, 1), pos + Vector3(0, 0, 0),
+				pos + Vector3(0, 1, 0), pos + Vector3(0, 1, 1), pos + Vector3(0, 0, 0)
 			]
 		"front":
 			vertices = [
-				pos + Vector3(0, 0, 1), pos + Vector3(1, 0, 1), pos + Vector3(1, 1, 1),
-				pos + Vector3(0, 0, 1), pos + Vector3(1, 1, 1), pos + Vector3(0, 1, 1)
+				pos + Vector3(1, 1, 1), pos + Vector3(1, 0, 1), pos + Vector3(0, 0, 1),
+				pos + Vector3(0, 1, 1), pos + Vector3(1, 1, 1), pos + Vector3(0, 0, 1)
 			]
 		"back":
 			vertices = [
-				pos + Vector3(1, 0, 0), pos + Vector3(0, 0, 0), pos + Vector3(0, 1, 0),
-				pos + Vector3(1, 0, 0), pos + Vector3(0, 1, 0), pos + Vector3(1, 1, 0)
+				pos + Vector3(1, 1, 0), pos + Vector3(0, 1, 0), pos + Vector3(0, 0, 0),
+				pos + Vector3(1, 0, 0), pos + Vector3(1, 1, 0), pos + Vector3(0, 0, 0)
 			]
 	return vertices
 
@@ -266,13 +270,19 @@ func _has_solid_voxel(pos: Vector3) -> bool:
 	return active_voxels.has(pos)
 
 func _get_voxel_type_for_terrain(noise_value: float, height: float) -> VoxelType:
-	if noise_value < surface_level:
-		return VoxelType.AIR
+	# Adjust noise threshold for more solid terrain
+	var adjusted_surface_level = surface_level - (height / CHUNK_SIZE) * 0.3
 	
-	if height > CHUNK_SIZE * 0.75:
-		return VoxelType.GRASS
-	elif height > CHUNK_SIZE * 0.5:
-		return VoxelType.DIRT
+	if noise_value < adjusted_surface_level:
+		return VoxelType.AIR
+		
+	# Create more varied terrain layers
+	var height_fraction = height / CHUNK_SIZE
+	
+	if height_fraction > 0.8:
+		return VoxelType.GRASS if noise_value > adjusted_surface_level + 0.2 else VoxelType.DIRT
+	elif height_fraction > 0.5:
+		return VoxelType.DIRT if noise_value > adjusted_surface_level + 0.1 else VoxelType.STONE
 	else:
 		return VoxelType.STONE
 
