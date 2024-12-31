@@ -426,6 +426,9 @@ func _on_mesh_generated(mesh: ArrayMesh, chunk_pos: Vector3, chunk_data: ChunkDa
 		_update_chunk_neighbors(chunk_pos)
 
 func _update_chunk_neighbors(chunk_pos: Vector3) -> void:
+	# Add debug prints
+	print("Updating neighbors for chunk: ", chunk_pos)
+	
 	for offset in [
 		Vector3(1, 0, 0), Vector3(-1, 0, 0),
 		Vector3(0, 1, 0), Vector3(0, -1, 0),
@@ -433,7 +436,9 @@ func _update_chunk_neighbors(chunk_pos: Vector3) -> void:
 	]:
 		var neighbor_pos = chunk_pos + offset
 		if neighbor_pos in active_chunks:
+			print("Found neighbor at: ", neighbor_pos)
 			var neighbor = active_chunks[neighbor_pos]
+			# Force mesh rebuild of neighbor
 			mesh_builder.build_mesh_threaded(neighbor.data, func(mesh: ArrayMesh, pos: Vector3):
 				_on_mesh_generated.call_deferred(mesh, neighbor_pos, neighbor.data)
 			)

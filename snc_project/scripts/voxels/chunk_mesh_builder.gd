@@ -259,6 +259,7 @@ func _add_face(world_pos: Vector3, chunk_pos: Vector3, voxel_type: int, chunk_da
 	var check_pos = chunk_pos + face.check_dir
 	
 	if _should_add_face(check_pos, chunk_data):
+		var final_pos = world_pos + (chunk_data.position * ChunkData.CHUNK_SIZE)
 		var texture_name := _get_texture_for_block(world_pos, face_name, voxel_type)
 		var uvs := _get_uvs_for_texture(texture_name, face_name)
 		
