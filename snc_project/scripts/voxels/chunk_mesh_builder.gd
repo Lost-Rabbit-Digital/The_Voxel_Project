@@ -122,53 +122,61 @@ func _initialize_uv_data() -> void:
 func _get_vertices_for_face(face: String, base_pos: Vector3) -> PackedVector3Array:
 	var vertices = PackedVector3Array()
 	
-	# Common vertices for a quad (2 triangles)
-	var v0: Vector3
-	var v1: Vector3
-	var v2: Vector3
-	var v3: Vector3
-	
+	# Counter-clockwise winding order for all faces
 	match face:
 		"top":
-			v0 = base_pos + Vector3(0, 1, 0)
-			v1 = base_pos + Vector3(0, 1, 1)
-			v2 = base_pos + Vector3(1, 1, 1)
-			v3 = base_pos + Vector3(1, 1, 0) 
+			vertices.push_back(base_pos + Vector3(0, 1, 0))  # Bottom-left
+			vertices.push_back(base_pos + Vector3(1, 1, 0))  # Bottom-right
+			vertices.push_back(base_pos + Vector3(1, 1, 1))  # Top-right
+			
+			vertices.push_back(base_pos + Vector3(0, 1, 0))  # Bottom-left
+			vertices.push_back(base_pos + Vector3(1, 1, 1))  # Top-right
+			vertices.push_back(base_pos + Vector3(0, 1, 1))  # Top-left
+			
 		"bottom":
-			# Counter-clockwise when viewed from below (looking up +Y)
-			v0 = base_pos + Vector3(0, 0, 1)  # Back-left
-			v1 = base_pos + Vector3(1, 0, 1)  # Back-right
-			v2 = base_pos + Vector3(1, 0, 0)  # Front-right
-			v3 = base_pos + Vector3(0, 0, 0)  # Front-left
-		"north": # +Z face
-			v0 = base_pos + Vector3(0, 0, 1)
-			v1 = base_pos + Vector3(1, 0, 1)
-			v2 = base_pos + Vector3(1, 1, 1)
-			v3 = base_pos + Vector3(0, 1, 1)
-		"south": # -Z face
-			v0 = base_pos + Vector3(1, 0, 0)  # Bottom-left
-			v1 = base_pos + Vector3(1, 1, 0)  # Top-left
-			v2 = base_pos + Vector3(0, 1, 0)  # Top-right
-			v3 = base_pos + Vector3(0, 0, 0)  # Bottom-right
-		"east": # +X face
-			v0 = base_pos + Vector3(1, 0, 1)  # Bottom-left
-			v1 = base_pos + Vector3(1, 1, 1)  # Top-left
-			v2 = base_pos + Vector3(1, 1, 0)  # Top-right
-			v3 = base_pos + Vector3(1, 0, 0)  # Bottom-right
-		"west": # -X face
-			v0 = base_pos + Vector3(0, 0, 0)  # Bottom-left
-			v1 = base_pos + Vector3(0, 1, 0)  # Top-left
-			v2 = base_pos + Vector3(0, 1, 1)  # Top-right
-			v3 = base_pos + Vector3(0, 0, 1)  # Bottom-right
-	
-	# Create triangles with correct winding order
-	vertices.push_back(v0)  # First triangle
-	vertices.push_back(v1)
-	vertices.push_back(v2)
-	
-	vertices.push_back(v0)  # Second triangle
-	vertices.push_back(v2)
-	vertices.push_back(v3)
+			vertices.push_back(base_pos + Vector3(0, 0, 0))  # Bottom-left
+			vertices.push_back(base_pos + Vector3(1, 0, 1))  # Top-right
+			vertices.push_back(base_pos + Vector3(1, 0, 0))  # Bottom-right
+			
+			vertices.push_back(base_pos + Vector3(0, 0, 0))  # Bottom-left
+			vertices.push_back(base_pos + Vector3(0, 0, 1))  # Top-left
+			vertices.push_back(base_pos + Vector3(1, 0, 1))  # Top-right
+			
+		"north":
+			vertices.push_back(base_pos + Vector3(0, 0, 1))  # Bottom-left
+			vertices.push_back(base_pos + Vector3(1, 0, 1))  # Bottom-right
+			vertices.push_back(base_pos + Vector3(1, 1, 1))  # Top-right
+			
+			vertices.push_back(base_pos + Vector3(0, 0, 1))  # Bottom-left
+			vertices.push_back(base_pos + Vector3(1, 1, 1))  # Top-right
+			vertices.push_back(base_pos + Vector3(0, 1, 1))  # Top-left
+			
+		"south":
+			vertices.push_back(base_pos + Vector3(0, 0, 0))  # Bottom-left
+			vertices.push_back(base_pos + Vector3(1, 1, 0))  # Top-right
+			vertices.push_back(base_pos + Vector3(1, 0, 0))  # Bottom-right
+			
+			vertices.push_back(base_pos + Vector3(0, 0, 0))  # Bottom-left
+			vertices.push_back(base_pos + Vector3(0, 1, 0))  # Top-left
+			vertices.push_back(base_pos + Vector3(1, 1, 0))  # Top-right
+			
+		"east":
+			vertices.push_back(base_pos + Vector3(1, 0, 0))  # Bottom-left
+			vertices.push_back(base_pos + Vector3(1, 0, 1))  # Bottom-right
+			vertices.push_back(base_pos + Vector3(1, 1, 1))  # Top-right
+			
+			vertices.push_back(base_pos + Vector3(1, 0, 0))  # Bottom-left
+			vertices.push_back(base_pos + Vector3(1, 1, 1))  # Top-right
+			vertices.push_back(base_pos + Vector3(1, 1, 0))  # Top-left
+			
+		"west":
+			vertices.push_back(base_pos + Vector3(0, 0, 0))  # Bottom-left
+			vertices.push_back(base_pos + Vector3(0, 1, 1))  # Top-right
+			vertices.push_back(base_pos + Vector3(0, 1, 0))  # Top-left
+			
+			vertices.push_back(base_pos + Vector3(0, 0, 0))  # Bottom-left
+			vertices.push_back(base_pos + Vector3(0, 0, 1))  # Bottom-right
+			vertices.push_back(base_pos + Vector3(0, 1, 1))  # Top-right
 	
 	return vertices
 
@@ -279,17 +287,40 @@ func _process_voxel_batch(chunk_data: ChunkData, batch_start: int, batch_end: in
 		_add_face(world_pos, pos, voxel_type, chunk_data, surface_tool, "east")
 		_add_face(world_pos, pos, voxel_type, chunk_data, surface_tool, "west")
 
-func build_mesh_threaded(chunk_data: ChunkData) -> void:
+func build_mesh_threaded(chunk_data: ChunkData, callback: Callable) -> void:
+	if not is_instance_valid(chunk_data) or chunk_data.voxels.is_empty():
+		push_error("Invalid chunk data in build_mesh_threaded")
+		return
+		
 	var surface_tool := SurfaceTool.new()
 	surface_tool.begin(Mesh.PRIMITIVE_TRIANGLES)
 	
-	var surface_arrays := []
-	var vertex_count := 0
+	var vertices_added := 0
 	
-	# Process in smaller batches
+	# Process in batches
 	for batch_start in range(0, chunk_data.voxels.size(), 64):
 		var batch_end = min(batch_start + 64, chunk_data.voxels.size())
 		_process_voxel_batch(chunk_data, batch_start, batch_end, surface_tool)
+		vertices_added += batch_end - batch_start
+		
+		# Allow frame to process after each batch
+		await Engine.get_main_loop().process_frame
+	
+	if vertices_added == 0:
+		push_warning("No vertices added for chunk")
+		callback.call(null, chunk_data.position)
+		return
+	
+	# Important: Index and commit the surface
+	surface_tool.index()
+	var array_mesh = surface_tool.commit()
+	
+	if not array_mesh or array_mesh.get_surface_count() == 0:
+		push_warning("Failed to generate valid mesh")
+		callback.call(null, chunk_data.position)
+		return
+		
+	callback.call(array_mesh, chunk_data.position)
 
 func build_mesh(chunk_data: ChunkData) -> MeshInstance3D:
 	var surface_tool := SurfaceTool.new()
@@ -317,6 +348,10 @@ func build_mesh(chunk_data: ChunkData) -> MeshInstance3D:
 	var mesh_instance := MeshInstance3D.new()
 	mesh_instance.mesh = array_mesh
 	mesh_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+	
+	# Fix the material assignment
+	var material = material_factory.get_default_material()  # Use the new convenience method
+	mesh_instance.material_override = material
 	
 	# Simplified collision
 	var collision = CollisionShape3D.new()

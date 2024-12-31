@@ -32,6 +32,8 @@ var _generation_semaphore := Semaphore.new()
 var _exit_thread := false
 var material_factory: MaterialFactory
 
+signal mesh_generated(mesh: ArrayMesh, chunk_position: Vector3)
+
 # Chunk loading states
 enum ChunkState { QUEUED, GENERATING, READY, FAILED }
 var _chunk_states: Dictionary = {}
@@ -56,7 +58,7 @@ func _init() -> void:
 	terrain_generator = TerrainGenerator.new()
 	chunk_cache = ChunkCache.new()
 	mesh_builder = ChunkMeshBuilder.new(material_factory, self)
-
+	
 func _ready() -> void:
 	# Start generation thread
 	generation_thread = Thread.new()
@@ -294,22 +296,90 @@ func _queue_chunk_generation(chunk_pos: Vector3, distance: float) -> void:
 		_chunk_states[chunk_pos] = ChunkState.QUEUED
 	mutex.unlock()
 
+func _add_chunk_mesh(mesh: ArrayMesh, chunk_pos: Vector3, chunk_data: ChunkData) -> void:
+	if not is_instance_valid(mesh) or not is_instance_valid(chunk_data):
+		return
+		
+	var mesh_instance = MeshInstance3D.new()
+	mesh_instance.mesh = mesh
+	mesh_instance.material_override = material_factory.get_default_material()
+	mesh_instance.position = chunk_pos * ChunkData.CHUNK_SIZE
+	mesh_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+	
+	# Add collision
+	var collision = CollisionShape3D.new()
+	var shape = BoxShape3D.new()
+	shape.size = Vector3(16, 16, 16)
+	collision.shape = shape
+	var body = StaticBody3D.new()
+	body.add_child(collision)
+	mesh_instance.add_child(body)
+	
+	mutex.lock()
+	if chunk_pos in active_chunks:
+		var existing = active_chunks[chunk_pos]
+		if existing.mesh and is_instance_valid(existing.mesh):
+			existing.mesh.queue_free()
+	
+	active_chunks[chunk_pos] = {
+		"data": chunk_data,
+		"mesh": mesh_instance
+	}
+	mutex.unlock()
+	
+	add_child(mesh_instance)
+
 func _finalize_chunk(chunk_pos: Vector3, chunk_data: ChunkData) -> void:
+	if not is_instance_valid(chunk_data):
+		print("Invalid chunk data for position: ", chunk_pos)
+		return
+		
+	mutex.lock()
 	if chunk_pos in active_chunks:
 		var existing_chunk = active_chunks[chunk_pos]
-		existing_chunk.mesh.queue_free()
+		if existing_chunk.mesh and is_instance_valid(existing_chunk.mesh):
+			existing_chunk.mesh.queue_free()
 		active_chunks.erase(chunk_pos)
+	mutex.unlock()
 	
-	# Use await since build_mesh is now a coroutine
-	var mesh_instance = await mesh_builder.build_mesh(chunk_data)
-	if mesh_instance:
-		mesh_instance.position = chunk_pos * ChunkData.CHUNK_SIZE
-		add_child(mesh_instance)
+	# Use threaded mesh building with error handling
+	mesh_builder.build_mesh_threaded(chunk_data, func(mesh: ArrayMesh, pos: Vector3):
+		if not mesh:
+			print("Mesh generation failed for chunk: ", chunk_pos)
+			return
+			
+		call_deferred("_add_chunk_mesh", mesh, chunk_pos, chunk_data)
+	)
+	
+func _on_mesh_generated(mesh: ArrayMesh, chunk_pos: Vector3, chunk_data: ChunkData) -> void:
+	# Create and setup the mesh instance
+	var mesh_instance = MeshInstance3D.new()
+	mesh_instance.mesh = mesh
+	mesh_instance.material_override = material_factory.get_default_material()
+	mesh_instance.position = chunk_pos * ChunkData.CHUNK_SIZE
+	mesh_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+	
+	# Add collision
+	var collision = CollisionShape3D.new()
+	var shape = BoxShape3D.new()
+	shape.size = Vector3(16, 16, 16)
+	collision.shape = shape
+	var body = StaticBody3D.new()
+	body.add_child(collision)
+	mesh_instance.add_child(body)
+	
+	# Update the active chunks dictionary
+	if chunk_pos in active_chunks:
+		# Remove old mesh if it exists
+		if active_chunks[chunk_pos].mesh != null:
+			active_chunks[chunk_pos].mesh.queue_free()
+			
 		active_chunks[chunk_pos] = {
 			"data": chunk_data,
 			"mesh": mesh_instance
 		}
 		
+		add_child(mesh_instance)
 		_update_chunk_neighbors(chunk_pos)
 
 func _update_chunk_neighbors(chunk_pos: Vector3) -> void:
@@ -321,44 +391,37 @@ func _update_chunk_neighbors(chunk_pos: Vector3) -> void:
 		var neighbor_pos = chunk_pos + offset
 		if neighbor_pos in active_chunks:
 			var neighbor = active_chunks[neighbor_pos]
-			if neighbor.mesh != null:
-				neighbor.mesh.queue_free()
-			var new_mesh = await mesh_builder.build_mesh(neighbor.data)
-			if new_mesh:
-				neighbor.mesh = new_mesh
-				neighbor.mesh.position = neighbor_pos * ChunkData.CHUNK_SIZE
-				add_child(neighbor.mesh)
+			mesh_builder.build_mesh_threaded(neighbor.data, func(mesh: ArrayMesh, pos: Vector3):
+				_on_mesh_generated.call_deferred(mesh, neighbor_pos, neighbor.data)
+			)
 
 func create_chunk(chunk_pos: Vector3) -> void:
 	if chunk_pos in active_chunks:
 		return
 	
 	var chunk_data = terrain_generator.generate_chunk_data(chunk_pos)
-	var mesh_instance = await mesh_builder.build_mesh(chunk_data)
+	mesh_builder.build_mesh_threaded(chunk_data, func(mesh: ArrayMesh, pos: Vector3):
+		_on_mesh_generated.call_deferred(mesh, chunk_pos, chunk_data)
+	)
 	
-	if mesh_instance:
-		mesh_instance.position = chunk_pos * ChunkData.CHUNK_SIZE
-		add_child(mesh_instance)
-		active_chunks[chunk_pos] = {
-			"data": chunk_data,
-			"mesh": mesh_instance
-		}
-		if debug_enabled:
-			print("Created chunk at: ", chunk_pos)
+	if debug_enabled:
+		print("Created chunk at: ", chunk_pos)
 
 func remove_chunk(chunk_pos: Vector3) -> void:
+	mutex.lock()
 	if chunk_pos in active_chunks:
 		var chunk = active_chunks[chunk_pos]
 		# Save chunk data to cache before removing
-		chunk_cache.save_chunk(chunk_pos, chunk.data)
+		if is_instance_valid(chunk.data):
+			chunk_cache.save_chunk(chunk_pos, chunk.data)
 		# Free the mesh instance
-		if chunk.mesh:
+		if chunk.mesh and is_instance_valid(chunk.mesh):
 			chunk.mesh.queue_free()
 		active_chunks.erase(chunk_pos)
-		# Clear neighbor cache to force mesh updates
-		mesh_builder.clear_neighbor_cache()
-		if debug_enabled:
-			print("Removed chunk at: ", chunk_pos)
+	mutex.unlock()
+	
+	# Clear neighbor cache to force mesh updates
+	mesh_builder.clear_neighbor_cache()
 
 func get_active_chunk_count() -> int:
 	return active_chunks.size()
