@@ -34,7 +34,6 @@ func _physics_process(delta):
 	if current_camera_position != previous_camera_position and chunk_manager:
 		# Camera is moving
 		chunk_manager.update_chunks(camera.global_position)
-		print("Camera is moving")
 	previous_camera_position = current_camera_position  # Update previous position for next frame
 
 func _exit_tree() -> void:

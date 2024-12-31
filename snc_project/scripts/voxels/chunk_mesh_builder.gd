@@ -288,19 +288,18 @@ func _process_voxel_batch(chunk_data: ChunkData, batch_start: int, batch_end: in
 		_add_face(world_pos, pos, voxel_type, chunk_data, surface_tool, "west")
 
 func build_mesh_threaded(chunk_data: ChunkData, callback: Callable) -> void:
-	# Validate chunk data
-	if not chunk_data:
-		push_error("Null chunk data passed to build_mesh_threaded")
+	if not chunk_data or not is_instance_valid(chunk_data):
+		push_error("Invalid chunk data passed to build_mesh_threaded")
 		callback.call(null, Vector3.ZERO)
 		return
 		
-	if not is_instance_valid(chunk_data):
-		push_error("Invalid chunk data instance in build_mesh_threaded")
-		callback.call(null, chunk_data.position if chunk_data else Vector3.ZERO)
-		return
-		
-	if not chunk_data.voxels or chunk_data.voxels.is_empty():
-		push_warning("Empty chunk data in build_mesh_threaded for position: " + str(chunk_data.position))
+	# Add debug info about the chunk being processed
+	#print("Building mesh for chunk at: ", chunk_data.position, 
+	#	  " with ", chunk_data.voxels.size(), " voxels")
+	
+	if chunk_data.voxels.is_empty():
+		print("Skipping empty chunk at: ", chunk_data.position)
+		# For empty chunks, we might still want to create a placeholder or skip
 		callback.call(null, chunk_data.position)
 		return
 		
@@ -424,28 +423,39 @@ func _should_add_face(pos: Vector3, chunk_data: ChunkData) -> bool:
 	if chunk_data.is_position_valid(pos):
 		return chunk_data.get_voxel(pos) == VoxelTypes.Type.AIR
 		
+	# If we're checking a position outside this chunk,
+	# we need to get the proper chunk and local position
 	var world_pos = chunk_data.local_to_world(pos)
-	var chunk_pos = chunk_manager.get_chunk_position(world_pos)
-	var neighbor_chunk = _get_cached_chunk(chunk_pos)
+	var neighbor_chunk = chunk_manager.get_chunk_at_position(world_pos)
 	
 	if not neighbor_chunk:
-		return true
-	
+		return true  # If no neighbor chunk, show face
+		
 	var local_pos = neighbor_chunk.world_to_local(world_pos)
+	# Add debug for face checking
+	#print("Checking face at world pos: ", world_pos, 
+	#	  " local pos: ", local_pos, 
+	#	  " voxel type: ", neighbor_chunk.get_voxel(local_pos))
+		  
 	return neighbor_chunk.get_voxel(local_pos) == VoxelTypes.Type.AIR
 	
 func _add_voxel_faces(world_pos: Vector3, chunk_pos: Vector3, voxel_type: int, chunk_data: ChunkData, surface_tool: SurfaceTool) -> void:
+	# Debug print for voxel addition
+	print("Adding voxel at chunk pos: ", chunk_pos, " world pos: ", world_pos)
+	
 	for face_name in _face_data:
 		var face = _face_data[face_name]
 		var check_pos = chunk_pos + face.check_dir
 		
+		# Debug print face checks
+		if face_name == "top":
+			print("Checking top face at: ", check_pos, 
+				  " should add: ", _should_add_face(check_pos, chunk_data))
+		
 		if _should_add_face(check_pos, chunk_data):
-			# Get the appropriate texture based on height and face
 			var texture_name := _get_texture_for_block(world_pos, face_name, voxel_type)
-			# Pass the face name to get correct UV rotation
 			var uvs := _get_uvs_for_texture(texture_name, face_name)
 			
-			# Add vertices for the face
 			for i in range(face.vertices.size()):
 				surface_tool.set_normal(face.normal)
 				surface_tool.set_uv(uvs[i])

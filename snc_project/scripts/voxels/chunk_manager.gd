@@ -79,9 +79,11 @@ func _get_debug_info() -> String:
 	return info
 
 func _generate_chunk_threaded(chunk_pos: Vector3) -> void:
-	if chunk_pos in active_chunks:
+	if _chunk_states.get(chunk_pos, ChunkState.QUEUED) != ChunkState.QUEUED:
 		return
 		
+	_chunk_states[chunk_pos] = ChunkState.GENERATING
+	
 	var chunk_data = chunk_cache.load_chunk(chunk_pos)
 	if not chunk_data:
 		chunk_data = terrain_generator.generate_chunk_data(chunk_pos)
@@ -91,6 +93,7 @@ func _generate_chunk_threaded(chunk_pos: Vector3) -> void:
 		"pos": chunk_pos,
 		"data": chunk_data
 	})
+	_chunk_states[chunk_pos] = ChunkState.READY
 	mutex.unlock()
 
 func _generate_chunk(chunk_info: Dictionary) -> void:
@@ -290,73 +293,73 @@ func update_chunks(center_pos: Vector3) -> void:
 	
 	# Calculate needed chunks using spherical distance
 	var needed_chunks := {}
-	for x in range(-RENDER_DISTANCE_HORIZONTAL - CHUNK_UNLOAD_MARGIN, 
-				   RENDER_DISTANCE_HORIZONTAL + CHUNK_UNLOAD_MARGIN + 1):
-		for y in range(-RENDER_DISTANCE_VERTICAL - CHUNK_UNLOAD_MARGIN,
-					   RENDER_DISTANCE_VERTICAL + CHUNK_UNLOAD_MARGIN + 1):
-			for z in range(-RENDER_DISTANCE_HORIZONTAL - CHUNK_UNLOAD_MARGIN,
-						   RENDER_DISTANCE_HORIZONTAL + CHUNK_UNLOAD_MARGIN + 1):
+	
+	# Track existing chunk positions to prevent duplicates
+	var existing_positions := {}
+	mutex.lock()
+	for pos in active_chunks:
+		existing_positions[pos] = true
+	mutex.unlock()
+	
+	for x in range(-RENDER_DISTANCE_HORIZONTAL, RENDER_DISTANCE_HORIZONTAL + 1):
+		for y in range(-RENDER_DISTANCE_VERTICAL, RENDER_DISTANCE_VERTICAL + 1):
+			for z in range(-RENDER_DISTANCE_HORIZONTAL, RENDER_DISTANCE_HORIZONTAL + 1):
 				var new_chunk_pos = chunk_pos + Vector3(x, y, z)
 				var h_distance = sqrt(pow(x, 2) + pow(z, 2))
 				var v_distance = abs(y)
 				
-				if h_distance <= RENDER_DISTANCE_HORIZONTAL + 0.5 and \
-				   v_distance <= RENDER_DISTANCE_VERTICAL + 0.5:
+				if h_distance <= RENDER_DISTANCE_HORIZONTAL and \
+				   v_distance <= RENDER_DISTANCE_VERTICAL:
 					needed_chunks[new_chunk_pos] = true
-					if not active_chunks.has(new_chunk_pos) and \
+					if not existing_positions.has(new_chunk_pos) and \
 					   not _chunk_states.has(new_chunk_pos):
-						_queue_chunk_generation(new_chunk_pos, h_distance)
+						_queue_chunk_generation(new_chunk_pos)
 	
 	# Remove out-of-range chunks
-	for existing_chunk_pos in active_chunks.keys():
-		if not needed_chunks.has(existing_chunk_pos):
-			remove_chunk(existing_chunk_pos)
-
-func _queue_chunk_generation(chunk_pos: Vector3, distance: float) -> void:
 	mutex.lock()
-	print("Queueing chunk: ", chunk_pos)  # Debug print
+	var chunks_to_remove := []
+	for existing_chunk_pos in active_chunks:
+		if not needed_chunks.has(existing_chunk_pos):
+			chunks_to_remove.append(existing_chunk_pos)
+	
+	for pos in chunks_to_remove:
+		remove_chunk(pos)
+	mutex.unlock()
+
+func _queue_chunk_generation(chunk_pos: Vector3) -> void:
+	mutex.lock()
 	if not _chunk_states.has(chunk_pos):
-		# Are we using _generation_queue or _generation_queue?
-		_generation_queue.append(chunk_pos)  # This might be wrong
+		print("Queueing chunk generation at: ", chunk_pos)
+		_generation_queue.append(chunk_pos)
 		_chunk_states[chunk_pos] = ChunkState.QUEUED
 	mutex.unlock()
 
 func _add_chunk_mesh(mesh: ArrayMesh, chunk_pos: Vector3, chunk_data: ChunkData) -> void:
 	if not is_instance_valid(mesh) or not is_instance_valid(chunk_data):
 		return
-		
+	
+	mutex.lock()
+	# Final validation before adding
+	if chunk_pos in active_chunks:
+		mutex.unlock()
+		return
+	
 	var mesh_instance = MeshInstance3D.new()
 	mesh_instance.mesh = mesh
 	mesh_instance.material_override = material_factory.get_default_material()
 	mesh_instance.position = chunk_pos * ChunkData.CHUNK_SIZE
-	mesh_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
-	
-	# Add collision
-	var collision = CollisionShape3D.new()
-	var shape = BoxShape3D.new()
-	shape.size = Vector3(16, 16, 16)
-	collision.shape = shape
-	var body = StaticBody3D.new()
-	body.add_child(collision)
-	mesh_instance.add_child(body)
-	
-	mutex.lock()
-	if chunk_pos in active_chunks:
-		var existing = active_chunks[chunk_pos]
-		if existing.mesh and is_instance_valid(existing.mesh):
-			existing.mesh.queue_free()
 	
 	active_chunks[chunk_pos] = {
 		"data": chunk_data,
 		"mesh": mesh_instance
 	}
-	mutex.unlock()
 	
 	add_child(mesh_instance)
+	mutex.unlock()
 
 func _finalize_chunk(chunk_pos: Vector3, chunk_data: ChunkData) -> void:
 	if not is_instance_valid(chunk_data):
-		push_error("Invalid chunk data for position: " + str(chunk_pos))
+		print("Invalid chunk data for position: ", chunk_pos)
 		return
 		
 	mutex.lock()
@@ -367,9 +370,14 @@ func _finalize_chunk(chunk_pos: Vector3, chunk_data: ChunkData) -> void:
 		active_chunks.erase(chunk_pos)
 	mutex.unlock()
 	
-	# Use a simpler retry approach
-	_attempt_mesh_generation(chunk_data, chunk_pos, 0)
-	
+	# Use threaded mesh building with error handling
+	mesh_builder.build_mesh_threaded(chunk_data, func(mesh: ArrayMesh, pos: Vector3):
+		if not mesh:
+			print("Mesh generation failed for chunk: ", chunk_pos)
+			return
+			
+		call_deferred("_add_chunk_mesh", mesh, chunk_pos, chunk_data)
+	)
 
 func _attempt_mesh_generation(chunk_data: ChunkData, chunk_pos: Vector3, current_retry: int) -> void:
 	mesh_builder.build_mesh_threaded(chunk_data, func(mesh: ArrayMesh, pos: Vector3):
@@ -463,11 +471,32 @@ func get_active_chunk_count() -> int:
 
 func get_chunk_position(world_pos: Vector3) -> Vector3:
 	return Vector3(
-		floor(world_pos.x / ChunkData.CHUNK_SIZE),
-		floor(world_pos.y / ChunkData.CHUNK_SIZE),
-		floor(world_pos.z / ChunkData.CHUNK_SIZE)
+		floori(world_pos.x / ChunkData.CHUNK_SIZE),
+		floori(world_pos.y / ChunkData.CHUNK_SIZE),
+		floori(world_pos.z / ChunkData.CHUNK_SIZE)
 	)
 
 func get_chunk_at_position(world_pos: Vector3) -> ChunkData:
 	var chunk_pos = get_chunk_position(world_pos)
 	return active_chunks.get(chunk_pos, {}).get("data")
+
+func debug_check_chunk_consistency(chunk_pos: Vector3) -> void:
+	var chunk = get_chunk_at_position(chunk_pos * ChunkData.CHUNK_SIZE)
+	if not chunk:
+		print("No chunk at ", chunk_pos)
+		return
+		
+	# Check all neighboring chunks
+	for offset in [Vector3.UP, Vector3.DOWN]:
+		var neighbor_pos = chunk_pos + offset
+		var neighbor = get_chunk_at_position(neighbor_pos * ChunkData.CHUNK_SIZE)
+		if neighbor:
+			print("Checking boundary between chunks ", chunk_pos, " and ", neighbor_pos)
+			# Check boundary voxels
+			for x in range(ChunkData.CHUNK_SIZE):
+				for z in range(ChunkData.CHUNK_SIZE):
+					var y = 0 if offset == Vector3.UP else ChunkData.CHUNK_SIZE - 1
+					var local_pos = Vector3(x, y, z)
+					var world_pos = chunk.local_to_world(local_pos)
+					var height = terrain_generator.get_terrain_height(world_pos.x, world_pos.z)
+					print("World pos: ", world_pos, " Height: ", height)
