@@ -273,6 +273,9 @@ func _process(_delta: float) -> void:
 			
 		_finalize_chunk(chunk_info.pos, chunk_info.data)
 		chunks_added += 1
+		
+	if Engine.get_process_frames() % 60 == 0:  # Check every ~1 second
+		_cleanup_orphaned_chunks()
 
 func update_chunks(center_pos: Vector3) -> void:
 	var chunk_pos = get_chunk_position(center_pos)
@@ -281,22 +284,40 @@ func update_chunks(center_pos: Vector3) -> void:
 		
 	last_center_chunk = chunk_pos
 	
-	# Get ordered list of chunks to load
-	var chunks_to_load = _get_chunk_load_order(center_pos)
+	# Calculate needed chunks using spherical distance
+	var needed_chunks := {}
 	
+	# Mark all chunks that should be kept
+	for x in range(-RENDER_DISTANCE_HORIZONTAL - CHUNK_UNLOAD_MARGIN, 
+				   RENDER_DISTANCE_HORIZONTAL + CHUNK_UNLOAD_MARGIN + 1):
+		for y in range(-RENDER_DISTANCE_VERTICAL - CHUNK_UNLOAD_MARGIN, 
+					  RENDER_DISTANCE_VERTICAL + CHUNK_UNLOAD_MARGIN + 1):
+			for z in range(-RENDER_DISTANCE_HORIZONTAL - CHUNK_UNLOAD_MARGIN, 
+						  RENDER_DISTANCE_HORIZONTAL + CHUNK_UNLOAD_MARGIN + 1):
+				var check_pos = chunk_pos + Vector3(x, y, z)
+				var distance = (check_pos - chunk_pos).length()
+				
+				# Keep chunks within render distance plus margin
+				if distance <= RENDER_DISTANCE_HORIZONTAL + CHUNK_UNLOAD_MARGIN:
+					needed_chunks[check_pos] = true
+
+	# Remove chunks that are too far away
 	mutex.lock()
-	# Clear queue but keep any chunks that are already generating
-	_generation_queue = _generation_queue.filter(func(pos): 
-		return _chunk_states.get(pos, ChunkState.QUEUED) == ChunkState.GENERATING
-	)
-	
-	# Add new chunks to queue
-	for new_chunk_pos in chunks_to_load:
-		if not active_chunks.has(new_chunk_pos) and \
-		   not _chunk_states.has(new_chunk_pos):
-			_generation_queue.append(new_chunk_pos)
-			_chunk_states[new_chunk_pos] = ChunkState.QUEUED
+	var chunks_to_remove := []
+	for existing_chunk_pos in active_chunks:
+		if not needed_chunks.has(existing_chunk_pos):
+			chunks_to_remove.append(existing_chunk_pos)
 	mutex.unlock()
+
+	# Process removals
+	for pos in chunks_to_remove:
+		remove_chunk(pos)
+		_chunk_states.erase(pos)  # Clear the state for removed chunks
+
+	# Queue new chunks for generation
+	for new_pos in needed_chunks:
+		if not active_chunks.has(new_pos) and not _chunk_states.has(new_pos):
+			_queue_chunk_generation(new_pos)
 
 func _queue_chunk_generation(chunk_pos: Vector3) -> void:
 	mutex.lock()
@@ -452,23 +473,40 @@ func remove_chunk(chunk_pos: Vector3) -> void:
 	mutex.lock()
 	if chunk_pos in active_chunks:
 		var chunk = active_chunks[chunk_pos]
-		# Save chunk data to cache before removing
-		if is_instance_valid(chunk.data):
+		
+		# Save to cache before removing
+		if chunk.data and is_instance_valid(chunk.data):
 			chunk_cache.save_chunk(chunk_pos, chunk.data)
 			
 		# Properly free the mesh instance
 		if chunk.mesh and is_instance_valid(chunk.mesh):
 			chunk.mesh.queue_free()
-			
-		# Clear from active chunks
-		active_chunks.erase(chunk_pos)
 		
-		# Clear from chunk states
+		# Clear from dictionaries
+		active_chunks.erase(chunk_pos)
 		_chunk_states.erase(chunk_pos)
+		_chunk_priorities.erase(chunk_pos)
+		
+		# Remove from generation queue if present
+		_generation_queue = _generation_queue.filter(func(pos): return pos != chunk_pos)
+		
+		if debug_enabled:
+			print("Removed chunk at: ", chunk_pos)
 	mutex.unlock()
 	
-	# Clear neighbor cache to force mesh updates
+	# Clear from neighbor cache
 	mesh_builder.clear_neighbor_cache()
+
+func _cleanup_orphaned_chunks() -> void:
+	var center_chunk = last_center_chunk
+	var max_distance = RENDER_DISTANCE_HORIZONTAL + CHUNK_UNLOAD_MARGIN + 1
+	
+	mutex.lock()
+	for chunk_pos in active_chunks.keys():
+		var distance = (chunk_pos - center_chunk).length()
+		if distance > max_distance:
+			remove_chunk(chunk_pos)
+	mutex.unlock()
 
 func cleanup() -> void:
 	thread_running = false
