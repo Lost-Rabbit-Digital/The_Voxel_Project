@@ -5,7 +5,6 @@ extends Resource
 const VOXEL_SIZE: float = 1.0
 var _neighbor_cache: Dictionary = {}
 
-var _vertex_cache := {}
 var _mesh_pool := []
 
 # Static face normals as Vector3 constants
@@ -45,8 +44,6 @@ const SNOW_HEIGHT := 64
 
 var material_factory: MaterialFactory
 var chunk_manager: ChunkManager
-var _arrays := []
-var _surface_tool: SurfaceTool
 
 # Face data initialized in _init
 var _face_data: Dictionary
@@ -218,39 +215,26 @@ func _get_texture_for_block(world_pos: Vector3, face: String, voxel_type: int) -
 				return "snow"
 			return "dirt"
 
-func _get_uvs_for_texture(texture_name: String, face: String = "") -> PackedVector2Array:
-	var base_uv: Vector2 = TEXTURE_COORDS[texture_name]
+func _get_uvs_for_texture(texture_name: String, _face_name: String = "") -> PackedVector2Array:
+	var base_uv: Vector2 = TEXTURE_COORDS.get(texture_name, TEXTURE_COORDS["dirt"])
 	var uv_size := TEXTURE_SIZE / ATLAS_SIZE
 	
 	var uvs := PackedVector2Array()
-	uvs.resize(6)
+	uvs.resize(6)  # Always ensure 6 vertices for a quad (2 triangles)
 	
 	var u := base_uv.x * uv_size
 	var v := base_uv.y * uv_size
 	
-	# Check if this is a grass side texture that needs rotation
-	if texture_name == "grass_side" and (face == "north" or face == "south" or face == "east" or face == "west"):
-		# Rotated UV mapping for side faces
-		# First triangle
-		uvs[4] = Vector2(u + uv_size, v)           # Bottom-right
-		uvs[5] = Vector2(u + uv_size, v + uv_size) # Top-right
-		uvs[3] = Vector2(u, v + uv_size)           # Top-left
-		
-		# Second triangle
-		uvs[2] = Vector2(u + uv_size, v)           # Bottom-right
-		uvs[0] = Vector2(u, v + uv_size)           # Top-left
-		uvs[1] = Vector2(u, v)                     # Bottom-left
-	else:
-		# Standard UV mapping for other textures
-		# First triangle
-		uvs[0] = Vector2(u, v + uv_size)           # Bottom-left
-		uvs[1] = Vector2(u + uv_size, v + uv_size) # Bottom-right
-		uvs[2] = Vector2(u + uv_size, v)           # Top-right
-		
-		# Second triangle
-		uvs[3] = Vector2(u, v + uv_size)           # Bottom-left
-		uvs[4] = Vector2(u + uv_size, v)           # Top-right
-		uvs[5] = Vector2(u, v)                     # Top-left
+	# Consistent UV mapping for all faces
+	# Triangle 1
+	uvs[0] = Vector2(u, v + uv_size)           # Bottom-left
+	uvs[1] = Vector2(u + uv_size, v + uv_size) # Bottom-right
+	uvs[2] = Vector2(u + uv_size, v)           # Top-right
+	
+	# Triangle 2
+	uvs[3] = Vector2(u, v + uv_size)           # Bottom-left
+	uvs[4] = Vector2(u + uv_size, v)           # Top-right
+	uvs[5] = Vector2(u, v)                     # Top-left
 	
 	return uvs
 
@@ -259,7 +243,6 @@ func _add_face(world_pos: Vector3, chunk_pos: Vector3, voxel_type: int, chunk_da
 	var check_pos = chunk_pos + face.check_dir
 	
 	if _should_add_face(check_pos, chunk_data):
-		var final_pos = world_pos + (chunk_data.position * ChunkData.CHUNK_SIZE)
 		var texture_name := _get_texture_for_block(world_pos, face_name, voxel_type)
 		var uvs := _get_uvs_for_texture(texture_name, face_name)
 		
@@ -268,67 +251,91 @@ func _add_face(world_pos: Vector3, chunk_pos: Vector3, voxel_type: int, chunk_da
 			surface_tool.set_uv(uvs[i])
 			surface_tool.add_vertex(face.vertices[i] + world_pos)
 
-func _process_voxel_batch(chunk_data: ChunkData, batch_start: int, batch_end: int, surface_tool: SurfaceTool) -> void:
+func _add_voxel_faces_safe(world_pos: Vector3, chunk_pos: Vector3, voxel_type: int, chunk_data: ChunkData, surface_tool: SurfaceTool) -> bool:
+	if not is_instance_valid(chunk_data) or not surface_tool:
+		return false
+		
+	for face_name in _face_data:
+		var face = _face_data[face_name]
+		if not face:
+			continue
+			
+		var check_pos = chunk_pos + face.check_dir
+		if _should_add_face(check_pos, chunk_data):
+			var texture_name := _get_texture_for_block(world_pos, face_name, voxel_type)
+			var uvs := _get_uvs_for_texture(texture_name, face_name)
+			
+			if uvs.size() != face.vertices.size():
+				push_error("UV array size mismatch for face: " + face_name)
+				continue
+				
+			for i in range(face.vertices.size()):
+				surface_tool.set_normal(face.normal)
+				surface_tool.set_uv(uvs[i])
+				surface_tool.add_vertex(face.vertices[i] + world_pos)
+				
+	return true
+
+func _process_voxel_batch(chunk_data: ChunkData, batch_start: int, batch_end: int, surface_tool: SurfaceTool) -> bool:
 	var voxels = chunk_data.voxels.keys()
-	
+	if batch_start >= voxels.size() or batch_start < 0:
+		return false
+		
 	for i in range(batch_start, min(batch_end, voxels.size())):
 		var pos = voxels[i]
 		var voxel_type = chunk_data.get_voxel(pos)
 		if voxel_type == VoxelTypes.Type.AIR:
 			continue
 			
-		var world_pos = pos * VOXEL_SIZE
-		# Only check faces that might be visible
-		if pos.y < ChunkData.CHUNK_SIZE - 1:
-			_add_face(world_pos, pos, voxel_type, chunk_data, surface_tool, "top")
-		if pos.y > 0:
-			_add_face(world_pos, pos, voxel_type, chunk_data, surface_tool, "bottom")
-		_add_face(world_pos, pos, voxel_type, chunk_data, surface_tool, "north")
-		_add_face(world_pos, pos, voxel_type, chunk_data, surface_tool, "south")
-		_add_face(world_pos, pos, voxel_type, chunk_data, surface_tool, "east")
-		_add_face(world_pos, pos, voxel_type, chunk_data, surface_tool, "west")
+		if not _add_voxel_faces_safe(pos * VOXEL_SIZE, pos, voxel_type, chunk_data, surface_tool):
+			return false
+			
+	return true
 
 func build_mesh_threaded(chunk_data: ChunkData, callback: Callable) -> void:
-	if not chunk_data or not is_instance_valid(chunk_data):
-		push_error("Invalid chunk data passed to build_mesh_threaded")
+	# Add validation for negative Y coordinates
+	if not chunk_data:
+		push_error("Null chunk data passed to build_mesh_threaded")
 		callback.call(null, Vector3.ZERO)
 		return
-		
-	# Add debug info about the chunk being processed
-	#print("Building mesh for chunk at: ", chunk_data.position, 
-	#	  " with ", chunk_data.voxels.size(), " voxels")
 	
-	if chunk_data.voxels.is_empty():
-		print("Skipping empty chunk at: ", chunk_data.position)
-		# For empty chunks, we might still want to create a placeholder or skip
-		callback.call(null, chunk_data.position)
+	# Ensure position is properly set
+	if not chunk_data.position:
+		push_error("Chunk data has invalid position")
+		callback.call(null, Vector3.ZERO)
 		return
-		
+	
+	# Create surface tool
 	var surface_tool := SurfaceTool.new()
 	surface_tool.begin(Mesh.PRIMITIVE_TRIANGLES)
 	
+	# Process voxels with position validation
+	var voxel_positions = chunk_data.voxels.keys()
 	var vertices_added := 0
 	
-	# Process in batches
-	for batch_start in range(0, chunk_data.voxels.size(), 64):
-		var batch_end = min(batch_start + 64, chunk_data.voxels.size())
-		_process_voxel_batch(chunk_data, batch_start, batch_end, surface_tool)
-		vertices_added += batch_end - batch_start
+	for pos in voxel_positions:
+		var voxel_type = chunk_data.get_voxel(pos)
+		if voxel_type == VoxelTypes.Type.AIR:
+			continue
+			
+		# Calculate world position accounting for negative coordinates
+		var world_pos = pos * VOXEL_SIZE
+		if chunk_data.position.y < 0:
+			# Adjust face checks for negative Y chunks
+			_add_faces_for_negative_y(world_pos, pos, voxel_type, chunk_data, surface_tool)
+		else:
+			_add_voxel_faces_safe(world_pos, pos, voxel_type, chunk_data, surface_tool)
 		
-		# Allow frame to process after each batch
-		await Engine.get_main_loop().process_frame
+		vertices_added += 1
 	
 	if vertices_added == 0:
-		push_warning("No vertices added for chunk at position: " + str(chunk_data.position))
 		callback.call(null, chunk_data.position)
 		return
 	
-	# Important: Index and commit the surface
 	surface_tool.index()
 	var array_mesh = surface_tool.commit()
 	
 	if not array_mesh or array_mesh.get_surface_count() == 0:
-		push_warning("Failed to generate valid mesh for position: " + str(chunk_data.position))
 		callback.call(null, chunk_data.position)
 		return
 		
@@ -394,8 +401,20 @@ func clear_neighbor_cache() -> void:
 	_neighbor_cache.clear()
 	
 func _get_face_uvs(face_name: String, voxel_type: VoxelTypes.Type) -> PackedVector2Array:
-	# Get UV coordinates from atlas based on voxel type
-	var base_uv = UV_LOOKUP[voxel_type]
+	# Get UV coordinates based on both voxel type and face
+	var base_uv: Vector2
+	
+	match voxel_type:
+		VoxelTypes.Type.GRASS:
+			if face_name == "top":
+				base_uv = UV_LOOKUP.get("grass_top", UV_LOOKUP[VoxelTypes.Type.GRASS])
+			elif face_name == "bottom":
+				base_uv = UV_LOOKUP[VoxelTypes.Type.DIRT]
+			else:
+				base_uv = UV_LOOKUP.get("grass_side", UV_LOOKUP[VoxelTypes.Type.GRASS])
+		_:
+			base_uv = UV_LOOKUP[voxel_type]
+	
 	var uv_size = 1.0/16.0  # Assuming 16x16 texture atlas
 	
 	var uvs = PackedVector2Array()
@@ -420,24 +439,76 @@ func _get_cached_chunk(chunk_pos: Vector3) -> ChunkData:
 		_neighbor_cache[chunk_pos] = chunk_manager.get_chunk_at_position(chunk_pos)
 	return _neighbor_cache[chunk_pos]
 	
-func _should_add_face(pos: Vector3, chunk_data: ChunkData) -> bool:
+
+func _add_single_face(face_name: String, world_pos: Vector3, voxel_type: int, surface_tool: SurfaceTool) -> void:
+	if not face_name in _face_data:
+		push_error("Invalid face name: " + face_name)
+		return
+		
+	var face = _face_data[face_name]
+	var texture_name := _get_texture_for_block(world_pos, face_name, voxel_type)
+	var uvs := _get_uvs_for_texture(texture_name, face_name)
+	
+	if uvs.size() != face.vertices.size():
+		push_error("UV array size mismatch for face: " + face_name)
+		return
+	
+	for i in range(face.vertices.size()):
+		surface_tool.set_normal(face.normal)
+		surface_tool.set_uv(uvs[i])
+		surface_tool.add_vertex(face.vertices[i] + world_pos)	
+
+func _add_faces_for_negative_y(world_pos: Vector3, chunk_pos: Vector3, voxel_type: int, chunk_data: ChunkData, surface_tool: SurfaceTool) -> void:
+	for face_name in _face_data:
+		var face = _face_data[face_name]
+		var check_pos = chunk_pos + face.check_dir
+		
+		# Special handling for negative Y chunks
+		var should_add = false
+		if check_pos.y < 0:
+			should_add = _should_add_face_negative_y(check_pos, chunk_data)
+		else:
+			should_add = _should_add_face(check_pos, chunk_data)
+			
+		if should_add:
+			_add_single_face(face_name, world_pos, voxel_type, surface_tool)
+
+func _should_add_face_negative_y(pos: Vector3, chunk_data: ChunkData) -> bool:
+	# Handle positions in current chunk
 	if chunk_data.is_position_valid(pos):
 		return chunk_data.get_voxel(pos) == VoxelTypes.Type.AIR
-		
-	# If we're checking a position outside this chunk,
-	# we need to get the proper chunk and local position
+	
+	# Get corresponding chunk for position
 	var world_pos = chunk_data.local_to_world(pos)
-	var neighbor_chunk = chunk_manager.get_chunk_at_position(world_pos)
+	var neighbor_chunk = _get_cached_chunk(world_pos)
 	
 	if not neighbor_chunk:
-		return true  # If no neighbor chunk, show face
+		# For negative Y chunks, assume solid ground below certain depth
+		if pos.y < -64:  # Adjust this value based on your desired world depth
+			return false
+		return true
 		
 	var local_pos = neighbor_chunk.world_to_local(world_pos)
-	# Add debug for face checking
-	#print("Checking face at world pos: ", world_pos, 
-	#	  " local pos: ", local_pos, 
-	#	  " voxel type: ", neighbor_chunk.get_voxel(local_pos))
-		  
+	return neighbor_chunk.get_voxel(local_pos) == VoxelTypes.Type.AIR
+
+func _should_add_face(pos: Vector3, chunk_data: ChunkData) -> bool:
+	# First check if position is within current chunk
+	if chunk_data.is_position_valid(pos):
+		return chunk_data.get_voxel(pos) == VoxelTypes.Type.AIR
+	
+	# Get the world position for the check
+	var world_pos = chunk_data.local_to_world(pos)
+	var neighbor_chunk = _get_cached_chunk(world_pos)
+	
+	# Important: If there's no neighbor chunk, we need to return false
+	# to ensure we generate faces at chunk boundaries
+	if not neighbor_chunk:
+		return false
+		
+	var local_pos = neighbor_chunk.world_to_local(world_pos)
+	if not neighbor_chunk.is_position_valid(local_pos):
+		return false
+		
 	return neighbor_chunk.get_voxel(local_pos) == VoxelTypes.Type.AIR
 	
 func _add_voxel_faces(world_pos: Vector3, chunk_pos: Vector3, voxel_type: int, chunk_data: ChunkData, surface_tool: SurfaceTool) -> void:

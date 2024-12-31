@@ -49,8 +49,6 @@ func generate_chunk_data(chunk_pos: Vector3) -> ChunkData:
 	
 	return chunk if chunk.voxels.size() > 0 else null
 
-	return chunk if chunk.voxels.size() > 0 else null
-
 func get_terrain_height(world_x: float, world_z: float) -> int:
 	# Get base noise value (-1 to 1)
 	var noise_value = noise.get_noise_2d(world_x, world_z)

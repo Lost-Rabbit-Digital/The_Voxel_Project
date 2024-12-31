@@ -8,7 +8,6 @@ var previous_camera_position = Vector3.ZERO  # Store the camera position from th
 func _ready() -> void:
 	# Add debug prints
 	print("game_world _ready()")
-	print("Camera position:", camera.global_position if camera else "Camera not found")
 	print("ChunkManager present:", chunk_manager != null)
 	
 	# Wait a frame for initialization
@@ -29,7 +28,7 @@ func _ready() -> void:
 	else:
 		print("ERROR: ChunkManager not found!")
 
-func _physics_process(delta):
+func _physics_process(_delta):
 	var current_camera_position = camera.get_global_position()  # Get current camera position
 	if current_camera_position != previous_camera_position and chunk_manager:
 		# Camera is moving

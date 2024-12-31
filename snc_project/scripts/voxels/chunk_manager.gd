@@ -37,8 +37,6 @@ var _generation_semaphore := Semaphore.new()
 var _exit_thread := false
 var material_factory: MaterialFactory
 
-signal mesh_generated(mesh: ArrayMesh, chunk_position: Vector3)
-
 # Chunk loading states
 enum ChunkState { QUEUED, GENERATING, READY, FAILED }
 var _chunk_states: Dictionary = {}
@@ -103,37 +101,34 @@ func _generate_chunk(chunk_info: Dictionary) -> void:
 		
 	var chunk_pos: Vector3 = chunk_info.pos
 	
-	# Skip if chunk already exists
+	mutex.lock()
 	if chunk_pos in active_chunks:
+		mutex.unlock()
 		return
 	
-	# Try to load from cache first
-	var chunk_data = chunk_cache.load_chunk(chunk_pos)
+	# Mark chunk as generating to prevent duplicate generation
+	_chunk_states[chunk_pos] = ChunkState.GENERATING
+	mutex.unlock()
 	
-	# If not in cache, generate new chunk
+	# Generate chunk data
+	var chunk_data = chunk_cache.load_chunk(chunk_pos)
 	if not chunk_data:
 		chunk_data = terrain_generator.generate_chunk_data(chunk_pos)
 	
-	if chunk_data and is_instance_valid(chunk_data):
+	if not chunk_data or not is_instance_valid(chunk_data) or chunk_data.voxels.is_empty():
 		mutex.lock()
-		chunks_to_add.append({
-			"pos": chunk_pos,
-			"data": chunk_data
-		})
+		_chunk_states[chunk_pos] = ChunkState.FAILED
 		mutex.unlock()
-		
-		if debug_enabled:
-			print("Generated chunk at: ", chunk_pos)
-	else:
-		push_error("Failed to generate chunk data for position: " + str(chunk_pos))
-		# Add to retry queue with attempt counter
-		mutex.lock()
-		chunk_retry_queue.append({
-			"pos": chunk_pos,
-			"retries": 0,
-			"timestamp": Time.get_ticks_msec()
-		})
-		mutex.unlock()
+		push_error("Failed to generate valid chunk data for position: " + str(chunk_pos))
+		return
+	
+	mutex.lock()
+	chunks_to_add.append({
+		"pos": chunk_pos,
+		"data": chunk_data
+	})
+	_chunk_states[chunk_pos] = ChunkState.READY
+	mutex.unlock()
 
 func _chunk_generation_thread() -> void:
 	while not _exit_thread:
@@ -191,10 +186,6 @@ func _calculate_chunk_priority(distance: float) -> float:
 		return 1000.0 - distance  # Highest priority
 	return 100.0 - distance  # Normal priority
 
-func cleanup() -> void:
-	thread_running = false
-	_exit_thread = true
-	
 func _thread_function() -> void:
 	print("Thread started")
 	while thread_running:
@@ -280,7 +271,7 @@ func _process(_delta: float) -> void:
 			mutex.unlock()
 			break
 			
-		await _finalize_chunk(chunk_info.pos, chunk_info.data)
+		_finalize_chunk(chunk_info.pos, chunk_info.data)
 		chunks_added += 1
 
 func update_chunks(center_pos: Vector3) -> void:
@@ -289,47 +280,28 @@ func update_chunks(center_pos: Vector3) -> void:
 		return
 		
 	last_center_chunk = chunk_pos
-	_update_chunk_priorities(center_pos)
 	
-	# Calculate needed chunks using spherical distance
-	var needed_chunks := {}
+	# Get ordered list of chunks to load
+	var chunks_to_load = _get_chunk_load_order(center_pos)
 	
-	# Track existing chunk positions to prevent duplicates
-	var existing_positions := {}
 	mutex.lock()
-	for pos in active_chunks:
-		existing_positions[pos] = true
-	mutex.unlock()
+	# Clear queue but keep any chunks that are already generating
+	_generation_queue = _generation_queue.filter(func(pos): 
+		return _chunk_states.get(pos, ChunkState.QUEUED) == ChunkState.GENERATING
+	)
 	
-	for x in range(-RENDER_DISTANCE_HORIZONTAL, RENDER_DISTANCE_HORIZONTAL + 1):
-		for y in range(-RENDER_DISTANCE_VERTICAL, RENDER_DISTANCE_VERTICAL + 1):
-			for z in range(-RENDER_DISTANCE_HORIZONTAL, RENDER_DISTANCE_HORIZONTAL + 1):
-				var new_chunk_pos = chunk_pos + Vector3(x, y, z)
-				var h_distance = sqrt(pow(x, 2) + pow(z, 2))
-				var v_distance = abs(y)
-				
-				if h_distance <= RENDER_DISTANCE_HORIZONTAL and \
-				   v_distance <= RENDER_DISTANCE_VERTICAL:
-					needed_chunks[new_chunk_pos] = true
-					if not existing_positions.has(new_chunk_pos) and \
-					   not _chunk_states.has(new_chunk_pos):
-						_queue_chunk_generation(new_chunk_pos)
-	
-	# Remove out-of-range chunks
-	mutex.lock()
-	var chunks_to_remove := []
-	for existing_chunk_pos in active_chunks:
-		if not needed_chunks.has(existing_chunk_pos):
-			chunks_to_remove.append(existing_chunk_pos)
-	
-	for pos in chunks_to_remove:
-		remove_chunk(pos)
+	# Add new chunks to queue
+	for new_chunk_pos in chunks_to_load:
+		if not active_chunks.has(new_chunk_pos) and \
+		   not _chunk_states.has(new_chunk_pos):
+			_generation_queue.append(new_chunk_pos)
+			_chunk_states[new_chunk_pos] = ChunkState.QUEUED
 	mutex.unlock()
 
 func _queue_chunk_generation(chunk_pos: Vector3) -> void:
 	mutex.lock()
 	if not _chunk_states.has(chunk_pos):
-		print("Queueing chunk generation at: ", chunk_pos)
+		#print("Queueing chunk generation at: ", chunk_pos)
 		_generation_queue.append(chunk_pos)
 		_chunk_states[chunk_pos] = ChunkState.QUEUED
 	mutex.unlock()
@@ -363,20 +335,15 @@ func _finalize_chunk(chunk_pos: Vector3, chunk_data: ChunkData) -> void:
 		return
 		
 	mutex.lock()
-	if chunk_pos in active_chunks:
-		var existing_chunk = active_chunks[chunk_pos]
-		if existing_chunk.mesh and is_instance_valid(existing_chunk.mesh):
-			existing_chunk.mesh.queue_free()
+	var existing_chunk = active_chunks.get(chunk_pos)
+	if existing_chunk and existing_chunk.mesh and is_instance_valid(existing_chunk.mesh):
+		existing_chunk.mesh.queue_free()
 		active_chunks.erase(chunk_pos)
 	mutex.unlock()
 	
-	# Use threaded mesh building with error handling
+	# Use threaded mesh building without await
 	mesh_builder.build_mesh_threaded(chunk_data, func(mesh: ArrayMesh, pos: Vector3):
-		if not mesh:
-			print("Mesh generation failed for chunk: ", chunk_pos)
-			return
-			
-		call_deferred("_add_chunk_mesh", mesh, chunk_pos, chunk_data)
+		call_deferred("_add_chunk_mesh", mesh, pos, chunk_data)
 	)
 
 func _attempt_mesh_generation(chunk_data: ChunkData, chunk_pos: Vector3, current_retry: int) -> void:
@@ -391,15 +358,16 @@ func _attempt_mesh_generation(chunk_data: ChunkData, chunk_pos: Vector3, current
 				push_error("Failed to generate mesh after " + str(MAX_RETRY_ATTEMPTS) + " attempts for chunk: " + str(chunk_pos))
 			return
 		
-		call_deferred("_add_chunk_mesh", mesh, chunk_pos, chunk_data)
+		# Use pos from the callback instead of chunk_pos
+		call_deferred("_add_chunk_mesh", mesh, pos, chunk_data)
 	)
 	
 func _on_mesh_generated(mesh: ArrayMesh, chunk_pos: Vector3, chunk_data: ChunkData) -> void:
-	# Create and setup the mesh instance
+	# Use the chunk_pos passed in rather than getting it from elsewhere
 	var mesh_instance = MeshInstance3D.new()
 	mesh_instance.mesh = mesh
 	mesh_instance.material_override = material_factory.get_default_material()
-	mesh_instance.position = chunk_pos * ChunkData.CHUNK_SIZE
+	mesh_instance.position = chunk_pos * ChunkData.CHUNK_SIZE  # Use the chunk_pos directly
 	mesh_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 	
 	# Add collision
@@ -426,9 +394,7 @@ func _on_mesh_generated(mesh: ArrayMesh, chunk_pos: Vector3, chunk_data: ChunkDa
 		_update_chunk_neighbors(chunk_pos)
 
 func _update_chunk_neighbors(chunk_pos: Vector3) -> void:
-	# Add debug prints
-	print("Updating neighbors for chunk: ", chunk_pos)
-	
+	var neighbors := []
 	for offset in [
 		Vector3(1, 0, 0), Vector3(-1, 0, 0),
 		Vector3(0, 1, 0), Vector3(0, -1, 0),
@@ -436,19 +402,46 @@ func _update_chunk_neighbors(chunk_pos: Vector3) -> void:
 	]:
 		var neighbor_pos = chunk_pos + offset
 		if neighbor_pos in active_chunks:
-			print("Found neighbor at: ", neighbor_pos)
+			neighbors.append(neighbor_pos)
+			
+			# Force mesh rebuild of neighbor to fix seams
 			var neighbor = active_chunks[neighbor_pos]
-			# Force mesh rebuild of neighbor
-			mesh_builder.build_mesh_threaded(neighbor.data, func(mesh: ArrayMesh, pos: Vector3):
-				_on_mesh_generated.call_deferred(mesh, neighbor_pos, neighbor.data)
-			)
+			if neighbor.data and is_instance_valid(neighbor.data):
+				mesh_builder.build_mesh_threaded(neighbor.data, func(mesh: ArrayMesh, _pos: Vector3):
+					# Use neighbor_pos instead of ignoring pos
+					call_deferred("_on_mesh_generated", mesh, neighbor_pos, neighbor.data)
+				)
+
+func _get_chunk_load_order(center_pos: Vector3) -> Array:
+	var chunks_to_load := []
+	var center_chunk = get_chunk_position(center_pos)
+	
+	# Load in layers, prioritizing the layer the player is in
+	for y in range(-RENDER_DISTANCE_VERTICAL, RENDER_DISTANCE_VERTICAL + 1):
+		for x in range(-RENDER_DISTANCE_HORIZONTAL, RENDER_DISTANCE_HORIZONTAL + 1):
+			for z in range(-RENDER_DISTANCE_HORIZONTAL, RENDER_DISTANCE_HORIZONTAL + 1):
+				var check_pos = center_chunk + Vector3(x, y, z)
+				# Don't queue chunks too far below surface
+				if check_pos.y < -8:  # Adjust this value based on your desired depth
+					continue
+				chunks_to_load.append(check_pos)
+	
+	# Sort by distance using lambda with properly named parameters
+	chunks_to_load.sort_custom(func(a: Vector3, b: Vector3) -> bool:
+		var dist_a = (a - center_chunk).length()
+		var dist_b = (b - center_chunk).length()
+		return dist_a < dist_b
+	)
+	
+	return chunks_to_load
 
 func create_chunk(chunk_pos: Vector3) -> void:
 	if chunk_pos in active_chunks:
 		return
 	
 	var chunk_data = terrain_generator.generate_chunk_data(chunk_pos)
-	mesh_builder.build_mesh_threaded(chunk_data, func(mesh: ArrayMesh, pos: Vector3):
+	mesh_builder.build_mesh_threaded(chunk_data, func(mesh: ArrayMesh, _pos: Vector3):
+		# Replace _pos with chunk_pos since that's what we want to use
 		_on_mesh_generated.call_deferred(mesh, chunk_pos, chunk_data)
 	)
 	
@@ -462,13 +455,37 @@ func remove_chunk(chunk_pos: Vector3) -> void:
 		# Save chunk data to cache before removing
 		if is_instance_valid(chunk.data):
 			chunk_cache.save_chunk(chunk_pos, chunk.data)
-		# Free the mesh instance
+			
+		# Properly free the mesh instance
 		if chunk.mesh and is_instance_valid(chunk.mesh):
 			chunk.mesh.queue_free()
+			
+		# Clear from active chunks
 		active_chunks.erase(chunk_pos)
+		
+		# Clear from chunk states
+		_chunk_states.erase(chunk_pos)
 	mutex.unlock()
 	
 	# Clear neighbor cache to force mesh updates
+	mesh_builder.clear_neighbor_cache()
+
+func cleanup() -> void:
+	thread_running = false
+	_exit_thread = true
+	
+	# Cleanup all active chunks
+	var chunks_to_cleanup = active_chunks.keys()
+	for chunk_pos in chunks_to_cleanup:
+		remove_chunk(chunk_pos)
+	
+	# Clear all caches and queues
+	mutex.lock()
+	_generation_queue.clear()
+	chunks_to_add.clear()
+	_chunk_states.clear()
+	mutex.unlock()
+	
 	mesh_builder.clear_neighbor_cache()
 
 func get_active_chunk_count() -> int:
