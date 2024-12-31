@@ -8,6 +8,9 @@ const CHUNK_GENERATION_BATCH_SIZE = 2  # Process multiple chunks per thread iter
 const CHUNK_LOAD_PRIORITY_DISTANCE := 2  # High priority for chunks very close to player
 const CHUNK_UNLOAD_MARGIN := 2  # Extra distance before unloading chunks
 
+const MESH_GENERATION_BATCH_SIZE := 2
+const MAX_CONCURRENT_MESH_UPDATES := 4
+
 var chunk_retry_queue: Array[Dictionary] = []
 const MAX_RETRY_ATTEMPTS := 3
 const CHUNK_TIMEOUT_MS := 100 
@@ -67,6 +70,21 @@ func _get_debug_info() -> String:
 	info += "Generation queue: %d\n" % _generation_queue.size()
 	info += "Thread running: %s\n" % str(thread_running)
 	return info
+
+func _generate_chunk_threaded(chunk_pos: Vector3) -> void:
+	if chunk_pos in active_chunks:
+		return
+		
+	var chunk_data = chunk_cache.load_chunk(chunk_pos)
+	if not chunk_data:
+		chunk_data = terrain_generator.generate_chunk_data(chunk_pos)
+		
+	mutex.lock()
+	chunks_to_add.append({
+		"pos": chunk_pos,
+		"data": chunk_data
+	})
+	mutex.unlock()
 
 func _generate_chunk(chunk_info: Dictionary) -> void:
 	if not chunk_info:
@@ -132,16 +150,17 @@ func _on_save_chunks_timer_timeout() -> void:
 func _update_chunk_priorities(player_pos: Vector3) -> void:
 	var player_chunk = get_chunk_position(player_pos)
 	
-	# Update priorities for all queued chunks
 	mutex.lock()
-	for chunk_info in _generation_queue:
-		var pos: Vector3 = chunk_info.pos
-		var distance = pos.distance_to(player_chunk)
+	for chunk_pos in _generation_queue:
+		# Use chunk_pos directly since it's already Vector3
+		var distance = chunk_pos.distance_to(player_chunk)
 		var priority = _calculate_chunk_priority(distance)
-		chunk_info.priority = priority
+		_chunk_priorities[chunk_pos] = priority
 	
-	# Sort queue by priority
-	_generation_queue.sort_custom(func(a, b): return a.priority > b.priority)
+	# Sort queue based on priorities
+	_generation_queue.sort_custom(func(a, b): 
+		return _chunk_priorities[a] > _chunk_priorities[b]
+	)
 	mutex.unlock()
 
 func _calculate_chunk_priority(distance: float) -> float:
@@ -197,6 +216,14 @@ func _thread_function() -> void:
 			mutex.unlock()
 		
 		OS.delay_msec(5)
+		
+func _process_chunk_queue() -> void:
+	var processed := 0
+	while not _generation_queue.is_empty() and processed < MESH_GENERATION_BATCH_SIZE:
+		var chunk_pos = _generation_queue.pop_front()
+		var thread = Thread.new()
+		thread.start(_generate_chunk_threaded.bind(chunk_pos))
+		processed += 1
 
 func _process(_delta: float) -> void:
 	# Clean up expired retry attempts
@@ -223,7 +250,7 @@ func _process(_delta: float) -> void:
 			mutex.unlock()
 			break
 			
-		_finalize_chunk(chunk_info.pos, chunk_info.data)
+		await _finalize_chunk(chunk_info.pos, chunk_info.data)
 		chunks_added += 1
 
 func update_chunks(center_pos: Vector3) -> void:
@@ -267,13 +294,13 @@ func _queue_chunk_generation(chunk_pos: Vector3, distance: float) -> void:
 	mutex.unlock()
 
 func _finalize_chunk(chunk_pos: Vector3, chunk_data: ChunkData) -> void:
-	# If chunk already exists, remove it first
 	if chunk_pos in active_chunks:
 		var existing_chunk = active_chunks[chunk_pos]
 		existing_chunk.mesh.queue_free()
 		active_chunks.erase(chunk_pos)
-		
-	var mesh_instance = mesh_builder.build_mesh(chunk_data)
+	
+	# Use await since build_mesh is now a coroutine
+	var mesh_instance = await mesh_builder.build_mesh(chunk_data)
 	if mesh_instance:
 		mesh_instance.position = chunk_pos * ChunkData.CHUNK_SIZE
 		add_child(mesh_instance)
@@ -282,23 +309,21 @@ func _finalize_chunk(chunk_pos: Vector3, chunk_data: ChunkData) -> void:
 			"mesh": mesh_instance
 		}
 		
-		call_deferred("_update_chunk_neighbors", chunk_pos)
+		_update_chunk_neighbors(chunk_pos)
 
 func _update_chunk_neighbors(chunk_pos: Vector3) -> void:
-	var neighbors = [
+	for offset in [
 		Vector3(1, 0, 0), Vector3(-1, 0, 0),
 		Vector3(0, 1, 0), Vector3(0, -1, 0),
 		Vector3(0, 0, 1), Vector3(0, 0, -1)
-	]
-	
-	for offset in neighbors:
+	]:
 		var neighbor_pos = chunk_pos + offset
 		if neighbor_pos in active_chunks:
-			# Rebuild neighbor's mesh to update face culling
 			var neighbor = active_chunks[neighbor_pos]
-			var new_mesh = mesh_builder.build_mesh(neighbor.data)
-			if new_mesh:
+			if neighbor.mesh != null:
 				neighbor.mesh.queue_free()
+			var new_mesh = await mesh_builder.build_mesh(neighbor.data)
+			if new_mesh:
 				neighbor.mesh = new_mesh
 				neighbor.mesh.position = neighbor_pos * ChunkData.CHUNK_SIZE
 				add_child(neighbor.mesh)
@@ -308,7 +333,7 @@ func create_chunk(chunk_pos: Vector3) -> void:
 		return
 	
 	var chunk_data = terrain_generator.generate_chunk_data(chunk_pos)
-	var mesh_instance = mesh_builder.build_mesh(chunk_data)
+	var mesh_instance = await mesh_builder.build_mesh(chunk_data)
 	
 	if mesh_instance:
 		mesh_instance.position = chunk_pos * ChunkData.CHUNK_SIZE

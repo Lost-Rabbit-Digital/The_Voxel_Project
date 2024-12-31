@@ -5,6 +5,9 @@ extends Resource
 const VOXEL_SIZE: float = 1.0
 var _neighbor_cache: Dictionary = {}
 
+var _vertex_cache := {}
+var _mesh_pool := []
+
 # Static face normals as Vector3 constants
 const NORMAL_TOP := Vector3(0, 1, 0)
 const NORMAL_BOTTOM := Vector3(0, -1, 0)
@@ -127,11 +130,10 @@ func _get_vertices_for_face(face: String, base_pos: Vector3) -> PackedVector3Arr
 	
 	match face:
 		"top":
-			# Counter-clockwise when viewed from above (looking down -Y)
-			v0 = base_pos + Vector3(0, 1, 0)  # Front-left
-			v1 = base_pos + Vector3(1, 1, 0)  # Front-right
-			v2 = base_pos + Vector3(1, 1, 1)  # Back-right
-			v3 = base_pos + Vector3(0, 1, 1)  # Back-left
+			v0 = base_pos + Vector3(0, 1, 0)
+			v1 = base_pos + Vector3(0, 1, 1)
+			v2 = base_pos + Vector3(1, 1, 1)
+			v3 = base_pos + Vector3(1, 1, 0) 
 		"bottom":
 			# Counter-clockwise when viewed from below (looking up +Y)
 			v0 = base_pos + Vector3(0, 0, 1)  # Back-left
@@ -139,10 +141,10 @@ func _get_vertices_for_face(face: String, base_pos: Vector3) -> PackedVector3Arr
 			v2 = base_pos + Vector3(1, 0, 0)  # Front-right
 			v3 = base_pos + Vector3(0, 0, 0)  # Front-left
 		"north": # +Z face
-			v0 = base_pos + Vector3(0, 0, 1)  # Bottom-left
-			v1 = base_pos + Vector3(0, 1, 1)  # Top-left
-			v2 = base_pos + Vector3(1, 1, 1)  # Top-right
-			v3 = base_pos + Vector3(1, 0, 1)  # Bottom-right
+			v0 = base_pos + Vector3(0, 0, 1)
+			v1 = base_pos + Vector3(1, 0, 1)
+			v2 = base_pos + Vector3(1, 1, 1)
+			v3 = base_pos + Vector3(0, 1, 1)
 		"south": # -Z face
 			v0 = base_pos + Vector3(1, 0, 0)  # Bottom-left
 			v1 = base_pos + Vector3(1, 1, 0)  # Top-left
@@ -244,51 +246,92 @@ func _get_uvs_for_texture(texture_name: String, face: String = "") -> PackedVect
 	
 	return uvs
 
-func build_mesh(chunk_data: ChunkData) -> MeshInstance3D:
-	var surface_tool := SurfaceTool.new()
-	surface_tool.begin(Mesh.PRIMITIVE_TRIANGLES)
+func _add_face(world_pos: Vector3, chunk_pos: Vector3, voxel_type: int, chunk_data: ChunkData, surface_tool: SurfaceTool, face_name: String) -> void:
+	var face = _face_data[face_name]
+	var check_pos = chunk_pos + face.check_dir
 	
-	var vertices_added := 0
+	if _should_add_face(check_pos, chunk_data):
+		var texture_name := _get_texture_for_block(world_pos, face_name, voxel_type)
+		var uvs := _get_uvs_for_texture(texture_name, face_name)
+		
+		for i in range(face.vertices.size()):
+			surface_tool.set_normal(face.normal)
+			surface_tool.set_uv(uvs[i])
+			surface_tool.add_vertex(face.vertices[i] + world_pos)
+
+func _process_voxel_batch(chunk_data: ChunkData, batch_start: int, batch_end: int, surface_tool: SurfaceTool) -> void:
+	var voxels = chunk_data.voxels.keys()
 	
-	for pos in chunk_data.voxels:
+	for i in range(batch_start, min(batch_end, voxels.size())):
+		var pos = voxels[i]
 		var voxel_type = chunk_data.get_voxel(pos)
 		if voxel_type == VoxelTypes.Type.AIR:
 			continue
 			
-		var world_pos: Vector3 = pos * VOXEL_SIZE
-		_add_voxel_faces(world_pos, pos, voxel_type, chunk_data, surface_tool)
-		vertices_added += 1
+		var world_pos = pos * VOXEL_SIZE
+		# Only check faces that might be visible
+		if pos.y < ChunkData.CHUNK_SIZE - 1:
+			_add_face(world_pos, pos, voxel_type, chunk_data, surface_tool, "top")
+		if pos.y > 0:
+			_add_face(world_pos, pos, voxel_type, chunk_data, surface_tool, "bottom")
+		_add_face(world_pos, pos, voxel_type, chunk_data, surface_tool, "north")
+		_add_face(world_pos, pos, voxel_type, chunk_data, surface_tool, "south")
+		_add_face(world_pos, pos, voxel_type, chunk_data, surface_tool, "east")
+		_add_face(world_pos, pos, voxel_type, chunk_data, surface_tool, "west")
+
+func build_mesh_threaded(chunk_data: ChunkData) -> void:
+	var surface_tool := SurfaceTool.new()
+	surface_tool.begin(Mesh.PRIMITIVE_TRIANGLES)
+	
+	var surface_arrays := []
+	var vertex_count := 0
+	
+	# Process in smaller batches
+	for batch_start in range(0, chunk_data.voxels.size(), 64):
+		var batch_end = min(batch_start + 64, chunk_data.voxels.size())
+		_process_voxel_batch(chunk_data, batch_start, batch_end, surface_tool)
+
+func build_mesh(chunk_data: ChunkData) -> MeshInstance3D:
+	var surface_tool := SurfaceTool.new()
+	surface_tool.begin(Mesh.PRIMITIVE_TRIANGLES)
+	
+	# Process in batches of 64 voxels
+	var voxels = chunk_data.voxels.keys()
+	var vertices_added := 0
+	
+	for batch_start in range(0, voxels.size(), 64):
+		var batch_end = min(batch_start + 64, voxels.size())
+		_process_voxel_batch(chunk_data, batch_start, batch_end, surface_tool)
+		vertices_added += batch_end - batch_start
+		
+		# Allow frame to process after each batch
+		await Engine.get_main_loop().process_frame
 	
 	if vertices_added == 0:
 		return null
 	
 	surface_tool.index()
-	
-	var array_mesh := surface_tool.commit()
-	if not array_mesh:
-		printerr("Failed to create array mesh")
-		return null
-		
-	var material = material_factory.get_material_for_type(VoxelTypes.Type.STONE)
-	if not material:
-		printerr("Failed to get material")
-		return null
-	
-	# Adjust material settings for sharper shading
-	material.roughness = 1.0
-	material.metallic = 0.0
-	material.metallic_specular = 0.0
-	material.shading_mode = BaseMaterial3D.SHADING_MODE_PER_VERTEX
-	
-	array_mesh.surface_set_material(0, material)
+	var array_mesh = _get_mesh_from_pool()
+	array_mesh = surface_tool.commit()
 	
 	var mesh_instance := MeshInstance3D.new()
 	mesh_instance.mesh = array_mesh
 	mesh_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
-	mesh_instance.gi_mode = GeometryInstance3D.GI_MODE_DYNAMIC
 	
-	_add_collision(mesh_instance)
+	# Simplified collision
+	var collision = CollisionShape3D.new()
+	var shape = BoxShape3D.new()
+	shape.size = Vector3(16, 16, 16)
+	collision.shape = shape
+	var body = StaticBody3D.new()
+	body.add_child(collision)
+	mesh_instance.add_child(body)
+	
 	return mesh_instance
+	
+func _get_mesh_from_pool() -> ArrayMesh:
+	return _mesh_pool.pop_back() if not _mesh_pool.is_empty() else ArrayMesh.new()
+
 	
 func _add_collision(mesh_instance: MeshInstance3D) -> void:
 	var body := StaticBody3D.new()
