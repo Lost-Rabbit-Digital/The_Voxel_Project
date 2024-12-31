@@ -3,6 +3,7 @@ extends Node3D
 
 @onready var chunk_manager: ChunkManager = $ChunkManager
 @onready var camera: Camera3D = $Camera3D
+var previous_camera_position = Vector3.ZERO  # Store the camera position from the previous frame
 
 func _ready() -> void:
 	# Add debug prints
@@ -28,9 +29,13 @@ func _ready() -> void:
 	else:
 		print("ERROR: ChunkManager not found!")
 
-func _process(_delta: float) -> void:
-	if chunk_manager and camera:
+func _physics_process(delta):
+	var current_camera_position = camera.get_global_position()  # Get current camera position
+	if current_camera_position != previous_camera_position and chunk_manager:
+		# Camera is moving
 		chunk_manager.update_chunks(camera.global_position)
+		print("Camera is moving")
+	previous_camera_position = current_camera_position  # Update previous position for next frame
 
 func _exit_tree() -> void:
 	if chunk_manager:
