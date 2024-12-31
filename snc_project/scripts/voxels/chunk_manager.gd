@@ -15,7 +15,7 @@ const CHUNK_TIMEOUT_MS := 100
 var terrain_generator: TerrainGenerator
 var mesh_builder: ChunkMeshBuilder
 var active_chunks: Dictionary = {}
-var chunk_generation_queue: Array[Vector3] = []
+var _generation_queue: Array = []
 var debug_enabled: bool = true
 var last_center_chunk := Vector3.ZERO
 var generation_thread: Thread
@@ -34,52 +34,37 @@ enum ChunkState { QUEUED, GENERATING, READY, FAILED }
 var _chunk_states: Dictionary = {}
 
 # Priority queue for chunk generation
-var _generation_queue: Array[Dictionary] = []
 var _chunk_priorities: Dictionary = {}
 
 func _init() -> void:
-	# Initialize all variables
+	# Initialize variables once
 	mutex = Mutex.new()
 	active_chunks = {}
 	chunk_retry_queue = []
-	chunk_generation_queue = []
+	_generation_queue = []
 	chunks_to_add = []
 	_chunk_states = {}
 	_generation_queue = []
 	_chunk_priorities = {}
 	debug_enabled = true
 	
-	# Initialize core components
+	# Initialize core components once
 	material_factory = MaterialFactory.new()
 	terrain_generator = TerrainGenerator.new()
 	chunk_cache = ChunkCache.new()
+	mesh_builder = ChunkMeshBuilder.new(material_factory, self)
 
 func _ready() -> void:
-	# Initialize components that need the node to be in the scene
-	print("ChunkManager _ready()")
-	
-	# Initialize core components if not already done
-	if not material_factory:
-		material_factory = MaterialFactory.new()
-	if not terrain_generator:
-		terrain_generator = TerrainGenerator.new()
-	if not chunk_cache:
-		chunk_cache = ChunkCache.new()
-	
-	# Initialize mesh builder
-	mesh_builder = ChunkMeshBuilder.new(material_factory, self)
-	
 	# Start generation thread
 	generation_thread = Thread.new()
 	thread_running = true
 	generation_thread.start(_thread_function)
 	
-	print("ChunkManager initialization complete")
 
 func _get_debug_info() -> String:
 	var info = ""
 	info += "Active chunks: %d\n" % active_chunks.size()
-	info += "Generation queue: %d\n" % chunk_generation_queue.size()
+	info += "Generation queue: %d\n" % _generation_queue.size()
 	info += "Thread running: %s\n" % str(thread_running)
 	return info
 
@@ -170,18 +155,22 @@ func cleanup() -> void:
 	_exit_thread = true
 	
 func _thread_function() -> void:
+	print("Thread started")
 	while thread_running:
+		#print("Thread iteration, queue size: ", _generation_queue.size())
 		mutex.lock()
-		var current_queue = chunk_generation_queue.slice(0, CHUNK_GENERATION_BATCH_SIZE - 1)
-		chunk_generation_queue = chunk_generation_queue.slice(CHUNK_GENERATION_BATCH_SIZE)
+		var current_queue = _generation_queue.slice(0, CHUNK_GENERATION_BATCH_SIZE - 1)
+		_generation_queue = _generation_queue.slice(CHUNK_GENERATION_BATCH_SIZE)
 		mutex.unlock()
 		
 		var batch_results = []
 		for chunk_pos in current_queue:
 			if not thread_running:
+				print("Thread not running, break.")
 				break
 				
 			if chunk_pos in active_chunks:
+				print("Chunk in active chunks")
 				continue
 			
 			# Try to load from cache first
@@ -199,7 +188,7 @@ func _thread_function() -> void:
 			else:
 				# If generation failed, re-queue with lower priority
 				mutex.lock()
-				chunk_generation_queue.append(chunk_pos)
+				_generation_queue.append(chunk_pos)
 				mutex.unlock()
 		
 		if not batch_results.is_empty():
@@ -254,6 +243,7 @@ func update_chunks(center_pos: Vector3) -> void:
 			for z in range(-RENDER_DISTANCE_HORIZONTAL - CHUNK_UNLOAD_MARGIN,
 						   RENDER_DISTANCE_HORIZONTAL + CHUNK_UNLOAD_MARGIN + 1):
 				var new_chunk_pos = chunk_pos + Vector3(x, y, z)
+				#print("New chunk position acquired: ", new_chunk_pos)
 				var distance = new_chunk_pos.distance_to(chunk_pos)
 				
 				if distance <= RENDER_DISTANCE_HORIZONTAL + 0.5:
@@ -269,13 +259,11 @@ func update_chunks(center_pos: Vector3) -> void:
 
 func _queue_chunk_generation(chunk_pos: Vector3, distance: float) -> void:
 	mutex.lock()
+	print("Queueing chunk: ", chunk_pos)  # Debug print
 	if not _chunk_states.has(chunk_pos):
+		# Are we using _generation_queue or _generation_queue?
+		_generation_queue.append(chunk_pos)  # This might be wrong
 		_chunk_states[chunk_pos] = ChunkState.QUEUED
-		_generation_queue.append({
-			"pos": chunk_pos,
-			"priority": _calculate_chunk_priority(distance)
-		})
-		_generation_semaphore.post()  # Signal thread to generate chunk
 	mutex.unlock()
 
 func _finalize_chunk(chunk_pos: Vector3, chunk_data: ChunkData) -> void:
