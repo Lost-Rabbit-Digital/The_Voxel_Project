@@ -270,14 +270,15 @@ func update_chunks(center_pos: Vector3) -> void:
 			for z in range(-RENDER_DISTANCE_HORIZONTAL - CHUNK_UNLOAD_MARGIN,
 						   RENDER_DISTANCE_HORIZONTAL + CHUNK_UNLOAD_MARGIN + 1):
 				var new_chunk_pos = chunk_pos + Vector3(x, y, z)
-				#print("New chunk position acquired: ", new_chunk_pos)
-				var distance = new_chunk_pos.distance_to(chunk_pos)
+				var h_distance = sqrt(pow(x, 2) + pow(z, 2))
+				var v_distance = abs(y)
 				
-				if distance <= RENDER_DISTANCE_HORIZONTAL + 0.5:
+				if h_distance <= RENDER_DISTANCE_HORIZONTAL + 0.5 and \
+				   v_distance <= RENDER_DISTANCE_VERTICAL + 0.5:
 					needed_chunks[new_chunk_pos] = true
 					if not active_chunks.has(new_chunk_pos) and \
 					   not _chunk_states.has(new_chunk_pos):
-						_queue_chunk_generation(new_chunk_pos, distance)
+						_queue_chunk_generation(new_chunk_pos, h_distance)
 	
 	# Remove out-of-range chunks
 	for existing_chunk_pos in active_chunks.keys():

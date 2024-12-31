@@ -368,21 +368,24 @@ func _get_face_uvs(face_name: String, voxel_type: VoxelTypes.Type) -> PackedVect
 	
 	return uvs
 	
+func _get_cached_chunk(chunk_pos: Vector3) -> ChunkData:
+	if not chunk_pos in _neighbor_cache:
+		_neighbor_cache[chunk_pos] = chunk_manager.get_chunk_at_position(chunk_pos)
+	return _neighbor_cache[chunk_pos]
+	
 func _should_add_face(pos: Vector3, chunk_data: ChunkData) -> bool:
-	if not chunk_data.is_position_valid(pos):
-		var world_pos = chunk_data.local_to_world(pos)
-		var chunk_pos = chunk_manager.get_chunk_position(world_pos)
+	if chunk_data.is_position_valid(pos):
+		return chunk_data.get_voxel(pos) == VoxelTypes.Type.AIR
 		
-		if not chunk_pos in _neighbor_cache:
-			_neighbor_cache[chunk_pos] = chunk_manager.get_chunk_at_position(world_pos)
-			
-		var neighbor_chunk = _neighbor_cache[chunk_pos]
-		if neighbor_chunk:
-			var local_pos = neighbor_chunk.world_to_local(world_pos)
-			return neighbor_chunk.get_voxel(local_pos) == VoxelTypes.Type.AIR
+	var world_pos = chunk_data.local_to_world(pos)
+	var chunk_pos = chunk_manager.get_chunk_position(world_pos)
+	var neighbor_chunk = _get_cached_chunk(chunk_pos)
+	
+	if not neighbor_chunk:
 		return true
 	
-	return chunk_data.get_voxel(pos) == VoxelTypes.Type.AIR
+	var local_pos = neighbor_chunk.world_to_local(world_pos)
+	return neighbor_chunk.get_voxel(local_pos) == VoxelTypes.Type.AIR
 	
 func _add_voxel_faces(world_pos: Vector3, chunk_pos: Vector3, voxel_type: int, chunk_data: ChunkData, surface_tool: SurfaceTool) -> void:
 	for face_name in _face_data:
