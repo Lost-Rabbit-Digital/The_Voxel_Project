@@ -156,16 +156,26 @@ func _update_chunk_priorities(player_pos: Vector3) -> void:
 	var player_chunk = get_chunk_position(player_pos)
 	
 	mutex.lock()
-	for chunk_pos in _generation_queue:
-		# Use chunk_pos directly since it's already Vector3
-		var distance = chunk_pos.distance_to(player_chunk)
-		var priority = _calculate_chunk_priority(distance)
-		_chunk_priorities[chunk_pos] = priority
+	var chunks_to_generate := []
 	
-	# Sort queue based on priorities
-	_generation_queue.sort_custom(func(a, b): 
-		return _chunk_priorities[a] > _chunk_priorities[b]
+	# First, collect all chunks within render distance
+	for x in range(-RENDER_DISTANCE_HORIZONTAL, RENDER_DISTANCE_HORIZONTAL + 1):
+		for y in range(-RENDER_DISTANCE_VERTICAL, RENDER_DISTANCE_VERTICAL + 1):
+			for z in range(-RENDER_DISTANCE_HORIZONTAL, RENDER_DISTANCE_HORIZONTAL + 1):
+				var check_pos = player_chunk + Vector3(x, y, z)
+				if not active_chunks.has(check_pos) and not _chunk_states.has(check_pos):
+					chunks_to_generate.append(check_pos)
+	
+	# Sort by Manhattan distance for more even loading
+	chunks_to_generate.sort_custom(func(a: Vector3, b: Vector3) -> bool:
+		var dist_a = abs(a.x - player_chunk.x) + abs(a.y - player_chunk.y) + abs(a.z - player_chunk.z)
+		var dist_b = abs(b.x - player_chunk.x) + abs(b.y - player_chunk.y) + abs(b.z - player_chunk.z)
+		return dist_a < dist_b
 	)
+	
+	# Clear and repopulate generation queue
+	_generation_queue.clear()
+	_generation_queue.append_array(chunks_to_generate)
 	mutex.unlock()
 
 func _calculate_chunk_priority(distance: float) -> float:
@@ -353,12 +363,11 @@ func _finalize_chunk(chunk_pos: Vector3, chunk_data: ChunkData) -> void:
 		active_chunks.erase(chunk_pos)
 	mutex.unlock()
 	
-	# Use threaded mesh building with error handling
+	# Add retry mechanism for failed mesh generation
 	mesh_builder.build_mesh_threaded(chunk_data, func(mesh: ArrayMesh, pos: Vector3):
 		if not mesh:
-			print("Mesh generation failed for chunk: ", chunk_pos)
+			_queue_chunk_generation(chunk_pos, 0)  # Retry failed chunks
 			return
-			
 		call_deferred("_add_chunk_mesh", mesh, chunk_pos, chunk_data)
 	)
 	
