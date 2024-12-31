@@ -15,6 +15,9 @@ var chunk_retry_queue: Array[Dictionary] = []
 const MAX_RETRY_ATTEMPTS := 3
 const CHUNK_TIMEOUT_MS := 100 
 
+var _active_threads: Array[Thread] = []
+const MAX_CONCURRENT_THREADS := 4
+
 var terrain_generator: TerrainGenerator
 var mesh_builder: ChunkMeshBuilder
 var active_chunks: Dictionary = {}
@@ -220,12 +223,20 @@ func _thread_function() -> void:
 		OS.delay_msec(5)
 		
 func _process_chunk_queue() -> void:
-	var processed := 0
-	while not _generation_queue.is_empty() and processed < MESH_GENERATION_BATCH_SIZE:
+	# Clean up completed threads
+	_active_threads = _active_threads.filter(func(thread: Thread) -> bool:
+		if not thread.is_alive():
+			thread.wait_to_finish()
+			return false
+		return true
+	)
+	
+	# Only start new threads if under limit
+	while not _generation_queue.is_empty() and _active_threads.size() < MAX_CONCURRENT_THREADS:
 		var chunk_pos = _generation_queue.pop_front()
 		var thread = Thread.new()
 		thread.start(_generate_chunk_threaded.bind(chunk_pos))
-		processed += 1
+		_active_threads.append(thread)
 
 func _process(_delta: float) -> void:
 	# Clean up expired retry attempts
