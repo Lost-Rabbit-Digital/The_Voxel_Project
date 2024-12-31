@@ -15,14 +15,14 @@ func _ready() -> void:
 	
 	if chunk_manager:
 		# TEST: Try creating a single test chunk
-		#chunk_manager.create_chunk(Vector3.ZERO)
+		chunk_manager.create_chunk(Vector3.ZERO)
 		#print("Initial demo chunk created")
 		
 		# Set camera to a good starting position to see chunks load
 		camera.position = Vector3(0, 32, 0)
 		
 		# Update chunks around camera
-		chunk_manager.update_chunks(camera.global_position)
+		#chunk_manager.update_chunks(camera.global_position)
 		print("Initial chunks updated")
 		print("Active chunks:", chunk_manager.get_active_chunk_count())
 	else:
