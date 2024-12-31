@@ -18,6 +18,8 @@ const CHUNK_TIMEOUT_MS := 100
 var _active_threads: Array[Thread] = []
 const MAX_CONCURRENT_THREADS := 4
 
+var retry_count = 0
+
 var terrain_generator: TerrainGenerator
 var mesh_builder: ChunkMeshBuilder
 var active_chunks: Dictionary = {}
@@ -92,7 +94,8 @@ func _generate_chunk_threaded(chunk_pos: Vector3) -> void:
 	mutex.unlock()
 
 func _generate_chunk(chunk_info: Dictionary) -> void:
-	if not chunk_info:
+	if not chunk_info or not chunk_info.has("pos"):
+		push_error("Invalid chunk info in _generate_chunk")
 		return
 		
 	var chunk_pos: Vector3 = chunk_info.pos
@@ -108,7 +111,7 @@ func _generate_chunk(chunk_info: Dictionary) -> void:
 	if not chunk_data:
 		chunk_data = terrain_generator.generate_chunk_data(chunk_pos)
 	
-	if chunk_data:
+	if chunk_data and is_instance_valid(chunk_data):
 		mutex.lock()
 		chunks_to_add.append({
 			"pos": chunk_pos,
@@ -119,7 +122,8 @@ func _generate_chunk(chunk_info: Dictionary) -> void:
 		if debug_enabled:
 			print("Generated chunk at: ", chunk_pos)
 	else:
-		# If generation failed, add to retry queue with attempt counter
+		push_error("Failed to generate chunk data for position: " + str(chunk_pos))
+		# Add to retry queue with attempt counter
 		mutex.lock()
 		chunk_retry_queue.append({
 			"pos": chunk_pos,
@@ -352,7 +356,7 @@ func _add_chunk_mesh(mesh: ArrayMesh, chunk_pos: Vector3, chunk_data: ChunkData)
 
 func _finalize_chunk(chunk_pos: Vector3, chunk_data: ChunkData) -> void:
 	if not is_instance_valid(chunk_data):
-		print("Invalid chunk data for position: ", chunk_pos)
+		push_error("Invalid chunk data for position: " + str(chunk_pos))
 		return
 		
 	mutex.lock()
@@ -363,11 +367,22 @@ func _finalize_chunk(chunk_pos: Vector3, chunk_data: ChunkData) -> void:
 		active_chunks.erase(chunk_pos)
 	mutex.unlock()
 	
-	# Add retry mechanism for failed mesh generation
+	# Use a simpler retry approach
+	_attempt_mesh_generation(chunk_data, chunk_pos, 0)
+	
+
+func _attempt_mesh_generation(chunk_data: ChunkData, chunk_pos: Vector3, current_retry: int) -> void:
 	mesh_builder.build_mesh_threaded(chunk_data, func(mesh: ArrayMesh, pos: Vector3):
 		if not mesh:
-			_queue_chunk_generation(chunk_pos, 0)  # Retry failed chunks
+			if current_retry < MAX_RETRY_ATTEMPTS:
+				print("Retrying mesh generation for chunk: ", chunk_pos, " attempt: ", current_retry + 1)
+				# Wait a frame before retrying
+				await get_tree().create_timer(0.1).timeout
+				_attempt_mesh_generation(chunk_data, chunk_pos, current_retry + 1)
+			else:
+				push_error("Failed to generate mesh after " + str(MAX_RETRY_ATTEMPTS) + " attempts for chunk: " + str(chunk_pos))
 			return
+		
 		call_deferred("_add_chunk_mesh", mesh, chunk_pos, chunk_data)
 	)
 	

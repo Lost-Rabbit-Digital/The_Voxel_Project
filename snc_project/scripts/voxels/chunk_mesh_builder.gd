@@ -288,8 +288,20 @@ func _process_voxel_batch(chunk_data: ChunkData, batch_start: int, batch_end: in
 		_add_face(world_pos, pos, voxel_type, chunk_data, surface_tool, "west")
 
 func build_mesh_threaded(chunk_data: ChunkData, callback: Callable) -> void:
-	if not is_instance_valid(chunk_data) or chunk_data.voxels.is_empty():
-		push_error("Invalid chunk data in build_mesh_threaded")
+	# Validate chunk data
+	if not chunk_data:
+		push_error("Null chunk data passed to build_mesh_threaded")
+		callback.call(null, Vector3.ZERO)
+		return
+		
+	if not is_instance_valid(chunk_data):
+		push_error("Invalid chunk data instance in build_mesh_threaded")
+		callback.call(null, chunk_data.position if chunk_data else Vector3.ZERO)
+		return
+		
+	if not chunk_data.voxels or chunk_data.voxels.is_empty():
+		push_warning("Empty chunk data in build_mesh_threaded for position: " + str(chunk_data.position))
+		callback.call(null, chunk_data.position)
 		return
 		
 	var surface_tool := SurfaceTool.new()
@@ -307,7 +319,7 @@ func build_mesh_threaded(chunk_data: ChunkData, callback: Callable) -> void:
 		await Engine.get_main_loop().process_frame
 	
 	if vertices_added == 0:
-		push_warning("No vertices added for chunk")
+		push_warning("No vertices added for chunk at position: " + str(chunk_data.position))
 		callback.call(null, chunk_data.position)
 		return
 	
@@ -316,7 +328,7 @@ func build_mesh_threaded(chunk_data: ChunkData, callback: Callable) -> void:
 	var array_mesh = surface_tool.commit()
 	
 	if not array_mesh or array_mesh.get_surface_count() == 0:
-		push_warning("Failed to generate valid mesh")
+		push_warning("Failed to generate valid mesh for position: " + str(chunk_data.position))
 		callback.call(null, chunk_data.position)
 		return
 		

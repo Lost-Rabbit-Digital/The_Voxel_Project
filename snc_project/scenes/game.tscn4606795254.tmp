@@ -1,0 +1,43 @@
+[gd_scene load_steps=8 format=3 uid="uid://yrxglwcwsqfy"]
+
+[ext_resource type="Script" uid="uid://dst412b11nh1l" path="res://scripts/environment/game_world.gd" id="1_lbhrr"]
+[ext_resource type="Script" uid="uid://gyeamovgi5ef" path="res://scripts/interaction/editor_style_camera.gd" id="2_yqjtg"]
+[ext_resource type="Script" uid="uid://sid4b653k8i5" path="res://scripts/voxels/chunk_manager.gd" id="4_iywne"]
+[ext_resource type="Script" uid="uid://bxwarlct4yu0s" path="res://scripts/environment/daylight_cycle.gd" id="4_lbhrr"]
+
+[sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_lnu2h"]
+sky_top_color = Color(0.105882, 0.294118, 0.556863, 1)
+sky_horizon_color = Color(1, 0.676945, 0.54883, 1)
+ground_bottom_color = Color(0.0116433, 0.0703067, 0.165667, 1)
+ground_horizon_color = Color(1, 0.678431, 0.54902, 1)
+
+[sub_resource type="Sky" id="Sky_lbhrr"]
+sky_material = SubResource("ProceduralSkyMaterial_lnu2h")
+
+[sub_resource type="Environment" id="Environment_lnu2h"]
+background_mode = 2
+sky = SubResource("Sky_lbhrr")
+ambient_light_source = 3
+reflected_light_source = 2
+
+[node name="GameWorld" type="Node3D"]
+script = ExtResource("1_lbhrr")
+
+[node name="ChunkManager" type="Node3D" parent="."]
+script = ExtResource("4_iywne")
+metadata/_custom_type_script = ExtResource("4_iywne")
+
+[node name="Camera3D" type="Camera3D" parent="."]
+transform = Transform3D(0.707107, 0, 0.707107, 0, 1, 0, -0.707107, 0, 0.707107, 0, 32, 0)
+script = ExtResource("2_yqjtg")
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.707107, 0.183013, 0.683013, 0, 0.965925, -0.258819, -0.707107, 0.183013, 0.683013, 0, 0, 0)
+shadow_enabled = true
+directional_shadow_mode = 0
+script = ExtResource("4_lbhrr")
+max_height = 80.0
+min_height = -25.0
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_lnu2h")
