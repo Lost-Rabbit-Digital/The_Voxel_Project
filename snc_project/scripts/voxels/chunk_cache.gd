@@ -47,9 +47,13 @@ func save_chunk(chunk_pos: Vector3, chunk_data: ChunkData) -> void:
 		file.close()
 
 func load_chunk(chunk_pos: Vector3) -> ChunkData:
+	if not cache_enabled:
+		return null
+		
 	var filename = get_chunk_filename(chunk_pos)
-	
-	# Try to load from cache
+	if not FileAccess.file_exists(filename):
+		return null
+		
 	var file = FileAccess.open(filename, FileAccess.READ)
 	if not file:
 		return null
@@ -59,10 +63,9 @@ func load_chunk(chunk_pos: Vector3) -> ChunkData:
 	
 	if not data:
 		return null
-		
+	
 	# Create new chunk data and populate it
-	var chunk_data = ChunkData.new()
-	chunk_data.setup(chunk_pos)  # Set the position using setup
+	var chunk_data = ChunkData.new(chunk_pos)
 	
 	# Convert serialized voxel data back to Vector3 keys
 	for pos_str in data.voxels:

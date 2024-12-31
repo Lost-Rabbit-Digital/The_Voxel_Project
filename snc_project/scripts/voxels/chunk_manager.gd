@@ -23,7 +23,6 @@ var mutex: Mutex
 var thread_running := false
 var chunks_to_add: Array = []
 var chunk_cache: ChunkCache
-var _chunk_pool: ChunkPool
 var save_chunks_timer: Timer
 
 var _generation_semaphore := Semaphore.new()
@@ -59,9 +58,6 @@ func _ready() -> void:
 	# Initialize components that need the node to be in the scene
 	print("ChunkManager _ready()")
 	
-	_chunk_pool = ChunkPool.new()
-	add_child(_chunk_pool._cleanup_timer)
-	
 	# Initialize core components if not already done
 	if not material_factory:
 		material_factory = MaterialFactory.new()
@@ -77,7 +73,7 @@ func _ready() -> void:
 	generation_thread = Thread.new()
 	thread_running = true
 	generation_thread.start(_thread_function)
-
+	
 	print("ChunkManager initialization complete")
 
 func _get_debug_info() -> String:
@@ -87,9 +83,8 @@ func _get_debug_info() -> String:
 	info += "Thread running: %s\n" % str(thread_running)
 	return info
 
-
 func _generate_chunk(chunk_info: Dictionary) -> void:
-	if not chunk_info or not "pos" in chunk_info:
+	if not chunk_info:
 		return
 		
 	var chunk_pos: Vector3 = chunk_info.pos
@@ -103,10 +98,7 @@ func _generate_chunk(chunk_info: Dictionary) -> void:
 	
 	# If not in cache, generate new chunk
 	if not chunk_data:
-		# Get chunk data from pool
-		chunk_data = _chunk_pool.get_chunk(chunk_pos)
-		# Generate terrain into the chunk data
-		terrain_generator.generate_chunk_data(chunk_data, chunk_pos)
+		chunk_data = terrain_generator.generate_chunk_data(chunk_pos)
 	
 	if chunk_data:
 		mutex.lock()
@@ -192,11 +184,12 @@ func _thread_function() -> void:
 			if chunk_pos in active_chunks:
 				continue
 			
-			# Get chunk data from pool
-			var chunk_data = _chunk_pool.get_chunk(chunk_pos)
+			# Try to load from cache first
+			var chunk_data = chunk_cache.load_chunk(chunk_pos)
 			
-			# Generate the terrain into the provided chunk_data
-			terrain_generator.generate_chunk_data(chunk_data, chunk_pos)
+			# If not in cache, generate new
+			if not chunk_data:
+				chunk_data = terrain_generator.generate_chunk_data(chunk_pos)
 			
 			if chunk_data:
 				batch_results.append({
@@ -208,6 +201,13 @@ func _thread_function() -> void:
 				mutex.lock()
 				chunk_generation_queue.append(chunk_pos)
 				mutex.unlock()
+		
+		if not batch_results.is_empty():
+			mutex.lock()
+			chunks_to_add.append_array(batch_results)
+			mutex.unlock()
+		
+		OS.delay_msec(5)
 
 func _process(_delta: float) -> void:
 	# Clean up expired retry attempts
@@ -319,11 +319,9 @@ func create_chunk(chunk_pos: Vector3) -> void:
 	if chunk_pos in active_chunks:
 		return
 	
-	var chunk_data = _chunk_pool.get_chunk(chunk_pos)
-	# Now passes both chunk_data and position to generate_chunk_data
-	terrain_generator.generate_chunk_data(chunk_data, chunk_pos)
-	
+	var chunk_data = terrain_generator.generate_chunk_data(chunk_pos)
 	var mesh_instance = mesh_builder.build_mesh(chunk_data)
+	
 	if mesh_instance:
 		mesh_instance.position = chunk_pos * ChunkData.CHUNK_SIZE
 		add_child(mesh_instance)
@@ -331,15 +329,22 @@ func create_chunk(chunk_pos: Vector3) -> void:
 			"data": chunk_data,
 			"mesh": mesh_instance
 		}
+		if debug_enabled:
+			print("Created chunk at: ", chunk_pos)
 
 func remove_chunk(chunk_pos: Vector3) -> void:
 	if chunk_pos in active_chunks:
 		var chunk = active_chunks[chunk_pos]
+		# Save chunk data to cache before removing
+		chunk_cache.save_chunk(chunk_pos, chunk.data)
+		# Free the mesh instance
 		if chunk.mesh:
 			chunk.mesh.queue_free()
-		_chunk_pool.return_chunk(chunk_pos)
 		active_chunks.erase(chunk_pos)
+		# Clear neighbor cache to force mesh updates
 		mesh_builder.clear_neighbor_cache()
+		if debug_enabled:
+			print("Removed chunk at: ", chunk_pos)
 
 func get_active_chunk_count() -> int:
 	return active_chunks.size()
