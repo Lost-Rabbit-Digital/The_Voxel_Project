@@ -166,22 +166,22 @@ func add_north_face(st: SurfaceTool, pos: Vector3, voxel_type: int) -> void:
 func add_south_face(st: SurfaceTool, pos: Vector3, voxel_type: int) -> void:
 	var vertices = PackedVector3Array([
 		pos + Vector3(0, 0, 0), # Bottom left
+		pos + Vector3(1, 1, 0), # Top right
 		pos + Vector3(0, 1, 0), # Top left
+		pos + Vector3(1, 0, 0), # Bottom right
 		pos + Vector3(1, 1, 0), # Top right
-		pos + Vector3(0, 0, 0), # Bottom left
-		pos + Vector3(1, 1, 0), # Top right
-		pos + Vector3(1, 0, 0)  # Bottom right
+		pos + Vector3(0, 0, 0)  # Bottom left
 	])
 	add_vertices(st, vertices, Vector3.BACK, get_uv(get_texture_pos(voxel_type, "side")))
 
 func add_east_face(st: SurfaceTool, pos: Vector3, voxel_type: int) -> void:
 	var vertices = PackedVector3Array([
 		pos + Vector3(1, 0, 0), # Bottom front
-		pos + Vector3(1, 1, 0), # Top front
+		pos + Vector3(1, 0, 1),  # Bottom back
 		pos + Vector3(1, 1, 1), # Top back
 		pos + Vector3(1, 0, 0), # Bottom front
 		pos + Vector3(1, 1, 1), # Top back
-		pos + Vector3(1, 0, 1)  # Bottom back
+		pos + Vector3(1, 1, 0), # Top front
 	])
 	add_vertices(st, vertices, Vector3.RIGHT, get_uv(get_texture_pos(voxel_type, "side")))
 
