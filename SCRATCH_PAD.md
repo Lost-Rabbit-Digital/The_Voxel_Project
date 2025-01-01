@@ -4,10 +4,25 @@
 - Implement greedy meshing to combine adjacent faces
 - Add a priority queue based on distance to player
 - Use GPU instancing for mesh generation
+- Implement LOD (Level of Detail) system
+- Use vertex buffer pooling
+- Optimize face culling algorithms
 
 Add texture support for the different material types?
 Implement smoother transitions between materials?
 Add additional terrain features like caves or overhangs?
+
+### Memory Management
+- Implement more aggressive chunk unloading
+- Add memory usage tracking
+- Create configurable memory limits
+
+### Procedural Generation Enhancements
+- Add biome variation
+- Implement cave systems
+- Create more diverse terrain features
+
+
 
 # Completed Tasks
 These are the tasks which have already been completed
