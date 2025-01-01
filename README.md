@@ -54,12 +54,11 @@ res://
 ├── assets/
 │   ├── textures/
 ├── scenes/
-├── scripts/
-│   ├── environment/
-│   └── systems/
-│   		├── voxel_system/
-│   		└── interaction_system/
-└── icon.svg/
+└── scripts/
+    ├── environment/
+    └── systems/
+    		├── interaction_system/
+    		└── voxel_system/
 ```
 
 ### Coding Standards
