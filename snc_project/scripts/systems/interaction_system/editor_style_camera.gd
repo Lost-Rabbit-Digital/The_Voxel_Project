@@ -1,6 +1,8 @@
 ## A camera controller that mimics Unreal Editor's viewport camera controls
 extends Camera3D
 
+@onready var game_world: Node3D = $".."
+
 # Camera movement settings
 @export_group("Movement Settings")
 ## Base movement speed
@@ -36,24 +38,14 @@ var _total_pitch: float = 0.0
 func _ready() -> void:
 	# Store initial rotation to use as reference
 	_initial_rotation = rotation_degrees
+	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	_mouse_captured = true
 
 func _input(event: InputEvent) -> void:
 	# Handle mouse button events
 	if event is InputEventMouseButton:
-		match event.button_index:
-			MOUSE_BUTTON_RIGHT:
-				# Toggle mouse capture for camera rotation
-				if event.pressed:
-					Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
-					_mouse_captured = true
-				else:
-					Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-					_mouse_captured = false
-			
-			MOUSE_BUTTON_LEFT, MOUSE_BUTTON_MIDDLE:
-				# Handle zoom with right + left/middle mouse
-				if _mouse_captured and event.pressed:
-					_last_mouse_position = event.position
+			if Input.is_action_pressed("zoom"):
+				_last_mouse_position = event.position
 	
 	# Handle mouse motion for camera rotation and zoom
 	elif event is InputEventMouseMotion:
@@ -61,8 +53,7 @@ func _input(event: InputEvent) -> void:
 			# Handle camera rotation
 			var rotation_delta = event.relative * mouse_sensitivity
 			
-			if Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) or \
-			   Input.is_mouse_button_pressed(MOUSE_BUTTON_MIDDLE):
+			if Input.is_action_pressed("zoom"):
 				# Handle zoom with right + left/middle mouse drag
 				var zoom_factor = zoom_speed * (-event.relative.y * 0.01)
 				if invert_zoom:
@@ -84,20 +75,24 @@ func _input(event: InputEvent) -> void:
 
 func _process(delta: float) -> void:
 	if _mouse_captured:
+		# Check if trying to escape from the game
+		if Input.is_action_pressed("escape"):
+			get_tree().quit()
+			
 		# Calculate movement direction based on input
 		var input_dir = Vector3.ZERO
 		
-		if Input.is_key_pressed(KEY_W):
+		if Input.is_action_pressed("forward"):
 			input_dir.z -= 1
-		if Input.is_key_pressed(KEY_S):
+		if Input.is_action_pressed("backward"):
 			input_dir.z += 1
-		if Input.is_key_pressed(KEY_A):
+		if Input.is_action_pressed("left"):
 			input_dir.x -= 1
-		if Input.is_key_pressed(KEY_D):
+		if Input.is_action_pressed("right"):
 			input_dir.x += 1
-		if Input.is_key_pressed(KEY_E):
+		if Input.is_action_pressed("up"):
 			input_dir.y += 1
-		if Input.is_key_pressed(KEY_Q):
+		if Input.is_action_pressed("down"):
 			input_dir.y -= 1
 			
 		# Normalize input direction
@@ -105,7 +100,7 @@ func _process(delta: float) -> void:
 		
 		# Apply speed modifier if shift is held
 		var current_speed = base_speed
-		if Input.is_key_pressed(KEY_SHIFT):
+		if Input.is_action_pressed("sprint"):
 			current_speed *= speed_multiplier
 		
 		# Calculate target velocity
