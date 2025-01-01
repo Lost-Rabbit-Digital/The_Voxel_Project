@@ -22,7 +22,8 @@ Add additional terrain features like caves or overhangs?
 - Implement cave systems
 - Create more diverse terrain features
 
-
+# Todo
+- Setup project structure in Godot similar to how the [README](../README.md/#project-structure) has it
 
 # Completed Tasks
 These are the tasks which have already been completed

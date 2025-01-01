@@ -6,32 +6,19 @@ A voxel-based dungeon crawler that combines the immersive first-person RPG eleme
 
 ## Features
 
-- First-person dungeon crawling with classic RPG elements
-- Voxel-based terrain and construction system
-- Procedurally generated dungeons with varying themes and difficulty
-- Classic RPG interface inspired by Daggerfall!
-- Character progression and skill system
 - Dynamic lighting and shadow system
-- Interactive environment with destructible terrain
-- Inventory management with crafting capabilities
-- Enemy AI with pathfinding optimized for voxel environments
+- Voxel-based terrain
 
 ## Getting Started
-
-### Prerequisites
-
-- Godot 4.0 or later
-- 1GB RAM minimum (64GB recommended)
-- 500MB available storage
 
 ### Installation
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/steel-and-cube.git
+git clone https://github.com/Lost-Rabbit-Digital/steel_and_cube.git
 ```
 
-2. Open Godot 4 Engine
+2. Open Godot 4.0 Engine
 
 3. Click "Import" and navigate to the cloned project directory
 
@@ -41,9 +28,20 @@ git clone https://github.com/yourusername/steel-and-cube.git
 
 ### Running the Game
 
-1. Open the project in Godot
+1. Open the project in Godot 4.0
 2. Press F5 or click the "Play" button in the top-right corner
 3. Alternatively, export the game for your platform using Godot's export system
+
+### System Requirements
+
+| Specification | Minimum | Recommended |
+|---------------|---------|-------------|
+| OS            | Windows XP 64-bit | Windows 10 64-bit |
+| Processor     | Intel Pentium 4 / AMD Athlon 64 | Intel Core i7-8700K / AMD Ryzen 7 3700X |
+| Memory        | 2 GB RAM | 16 GB RAM |
+| Graphics      | Nvidia GeForce 6800 GT / ATI Radeon X800 XT | Nvidia RTX 2070 Super / AMD RX 5700 XT |
+| DirectX       | Version 9.0c | Version 12 |
+| Storage       | 1 GB HDD | 250 GB SSD |
 
 ## Development Setup
 
@@ -113,9 +111,9 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Roadmap
 
-- [ ] Enhanced dungeon generation algorithms
-- [ ] Additional enemy types and behaviors
-- [ ] Extended crafting system
-- [ ] Multiplayer support
-- [ ] Mod support
-- [ ] Additional biomes and environments
+- [ ] Dungeons
+- [ ] Enemies
+- [ ] Crafting
+- [ ] Multiplayer
+- [ ] Mods
+- [ ] Biomes
