@@ -2,7 +2,7 @@
 class_name MaterialFactory
 extends Resource
 
-const TEXTURE_PATH = "res://textures/main_texture_atlas.png"  # Adjust path to your texture atlas
+const TEXTURE_PATH = "res://assets/textures/main_texture_atlas.png"
 var cached_materials: Dictionary = {}
 
 func get_material_for_type(type: int = 0) -> StandardMaterial3D:

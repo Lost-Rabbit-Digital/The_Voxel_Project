@@ -1,9 +1,9 @@
 [gd_scene load_steps=8 format=3 uid="uid://yrxglwcwsqfy"]
 
-[ext_resource type="Script" uid="uid://dst412b11nh1l" path="res://scripts/environment/game_world.gd" id="1_lbhrr"]
-[ext_resource type="Script" uid="uid://gyeamovgi5ef" path="res://scripts/interaction/editor_style_camera.gd" id="2_yqjtg"]
-[ext_resource type="Script" uid="uid://sid4b653k8i5" path="res://scripts/voxels/chunk_manager.gd" id="4_iywne"]
-[ext_resource type="Script" uid="uid://bxwarlct4yu0s" path="res://scripts/environment/daylight_cycle.gd" id="4_lbhrr"]
+[ext_resource type="Script" uid="uid://dst412b11nh1l" path="res://scripts/environment/game_world.gd" id="1_0vfqx"]
+[ext_resource type="Script" uid="uid://sid4b653k8i5" path="res://scripts/systems/voxel_system/chunk_manager.gd" id="2_wbbl4"]
+[ext_resource type="Script" uid="uid://gyeamovgi5ef" path="res://scripts/systems/interaction_system/editor_style_camera.gd" id="3_6c6v5"]
+[ext_resource type="Script" uid="uid://bxwarlct4yu0s" path="res://scripts/environment/daylight_cycle.gd" id="4_bhwwd"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_lnu2h"]
 sky_top_color = Color(0.105882, 0.294118, 0.556863, 1)
@@ -21,21 +21,21 @@ ambient_light_source = 3
 reflected_light_source = 2
 
 [node name="GameWorld" type="Node3D"]
-script = ExtResource("1_lbhrr")
+script = ExtResource("1_0vfqx")
 
 [node name="ChunkManager" type="Node3D" parent="."]
-script = ExtResource("4_iywne")
-metadata/_custom_type_script = ExtResource("4_iywne")
+script = ExtResource("2_wbbl4")
+metadata/_custom_type_script = ExtResource("2_wbbl4")
 
 [node name="Camera3D" type="Camera3D" parent="."]
 transform = Transform3D(0.707107, 0, 0.707107, 0, 1, 0, -0.707107, 0, 0.707107, 0, 32, 0)
-script = ExtResource("2_yqjtg")
+script = ExtResource("3_6c6v5")
 
 [node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
 transform = Transform3D(0.707107, 0.183013, 0.683013, 0, 0.965925, -0.258819, -0.707107, 0.183013, 0.683013, 0, 0, 0)
 shadow_enabled = true
 directional_shadow_mode = 0
-script = ExtResource("4_lbhrr")
+script = ExtResource("4_bhwwd")
 max_height = 80.0
 min_height = -25.0
 

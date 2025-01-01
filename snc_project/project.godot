@@ -10,12 +10,12 @@ config_version=5
 
 [application]
 
-config/name="snc_project"
+config/name="Steel and Cube"
 config/description="Dungeon crawler with RPG elements in a voxel-based world."
-config/version="0.0.0"
+config/version="1.0.0"
 run/main_scene="uid://yrxglwcwsqfy"
 config/features=PackedStringArray("4.4", "GL Compatibility")
-config/icon="uid://ctw1ib7hlkhh3"
+config/icon="uid://ce7ub8p17vdqb"
 
 [autoload]
 

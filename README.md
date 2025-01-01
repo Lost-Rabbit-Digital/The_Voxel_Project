@@ -48,23 +48,18 @@ git clone https://github.com/Lost-Rabbit-Digital/steel_and_cube.git
 ### Project Structure
 
 ```
-steel-and-cube/
+res://
+├── addons/
+│   ├── debug_menu/
 ├── assets/
 │   ├── textures/
-│   ├── models/
-│   ├── sounds/
-│   └── ui/
 ├── scenes/
-│   ├── main_menu/
-│   ├── game_world/
-│   └── ui/
 ├── scripts/
-│   ├── world_generation/
-│   ├── player/
-│   ├── enemies/
+│   ├── environment/
 │   └── systems/
-├── addons/
-└── project.godot
+│   		├── voxel_system/
+│   		└── interaction_system/
+└── icon.svg/
 ```
 
 ### Coding Standards
