@@ -12,28 +12,45 @@ var material_factory: MaterialFactory
 func _init() -> void:
 	material_factory = MaterialFactory.new()
 	terrain_generator = TerrainGenerator.new()
-	mesh_builder = ChunkMeshBuilder.new(material_factory)
+	mesh_builder = ChunkMeshBuilder.new(material_factory, self)
+
+var last_update_pos: Vector3
+const UPDATE_THRESHOLD := 8.0  # Only update chunks when moved this many units
 
 func update_chunks(center_pos: Vector3) -> void:
+	# Only update if moved significant distance
+	if last_update_pos and center_pos.distance_to(last_update_pos) < UPDATE_THRESHOLD:
+		return
+		
 	var chunk_pos = get_chunk_position(center_pos)
+	last_update_pos = center_pos
 	
-	# Calculate which chunks should be active
+	# Pre-calculate needed chunks
 	var needed_chunks := {}
+	var chunks_to_remove := []
+	
+	# Calculate manhattan distance for better performance
 	for x in range(-RENDER_DISTANCE, RENDER_DISTANCE + 1):
 		for y in range(-2, 3):  # Reduced vertical range
 			for z in range(-RENDER_DISTANCE, RENDER_DISTANCE + 1):
 				var check_pos = chunk_pos + Vector3(x, y, z)
-				needed_chunks[check_pos] = true
+				var manhattan_dist = abs(x) + abs(y) + abs(z)
+				if manhattan_dist <= RENDER_DISTANCE:
+					needed_chunks[check_pos] = true
 	
-	# Remove chunks that are too far
-	for existing_chunk_pos in active_chunks.keys():
-		if not needed_chunks.has(existing_chunk_pos):
-			remove_chunk(existing_chunk_pos)
+	# Remove distant chunks
+	for existing_pos in active_chunks.keys():
+		if not needed_chunks.has(existing_pos):
+			chunks_to_remove.append(existing_pos)
 	
-	# Add new chunks that are needed
-	for new_chunk_pos in needed_chunks:
-		if not active_chunks.has(new_chunk_pos):
-			create_chunk(new_chunk_pos)
+	# Process removals in batch
+	for pos in chunks_to_remove:
+		remove_chunk(pos)
+	
+	# Add new chunks
+	for new_pos in needed_chunks:
+		if not active_chunks.has(new_pos):
+			create_chunk(new_pos)
 
 func create_chunk(chunk_pos: Vector3) -> void:
 	if chunk_pos in active_chunks:
