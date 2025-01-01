@@ -1,23 +1,29 @@
-# editor_style_camera.gd
-# A camera controller that mimics Unreal Editor's viewport camera controls
-# Attach this script to a Camera3D node
-
+## A camera controller that mimics Unreal Editor's viewport camera controls
 extends Camera3D
 
 # Camera movement settings
 @export_group("Movement Settings")
-@export var base_speed: float = 5.0          # Base movement speed
-@export var speed_multiplier: float = 2.0     # Speed multiplier when holding shift
-@export var mouse_sensitivity: float = 0.003  # Mouse look sensitivity
-@export var zoom_speed: float = 1.0          # Zoom speed with right+left mouse
-@export var acceleration: float = 3.0         # Movement acceleration
-@export var deceleration: float = 5.0        # Movement deceleration
+## Base movement speed
+@export var base_speed: float = 5.0 
+## Speed multiplier when holding shift          
+@export var speed_multiplier: float = 2.0  
+## Mouse look sensitivity   
+@export var mouse_sensitivity: float = 0.003  
+## Zoom speed with right+left mouse
+@export var zoom_speed: float = 1.0     
+## Movement acceleration      
+@export var acceleration: float = 3.0     
+## Movement deceleration    
+@export var deceleration: float = 5.0         
 
 # Camera behavior settings
 @export_group("Behavior Settings")
-@export var invert_y: bool = true           # Invert vertical mouse movement
-@export var invert_zoom: bool = false        # Invert zoom direction
-@export var smooth_movement: bool = true     # Enable movement smoothing
+## Invert vertical mouse movement
+@export var invert_y: bool = true      
+## Invert zoom direction       
+@export var invert_zoom: bool = false         
+## Enable movement smoothing
+@export var smooth_movement: bool = true      
 
 # Internal variables for camera state
 var _current_velocity: Vector3 = Vector3.ZERO
