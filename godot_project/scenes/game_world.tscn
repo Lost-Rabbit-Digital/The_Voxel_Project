@@ -25,7 +25,6 @@ script = ExtResource("1_0vfqx")
 
 [node name="ChunkManager" type="Node3D" parent="."]
 script = ExtResource("2_wbbl4")
-debug_mode = true
 metadata/_custom_type_script = "uid://sid4b653k8i5"
 
 [node name="Camera3D" type="Camera3D" parent="."]

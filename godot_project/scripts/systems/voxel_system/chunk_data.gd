@@ -23,7 +23,7 @@ func set_voxel(local_pos: Vector3, type: VoxelTypes.Type) -> void:
 	
 	needs_remesh = true
 	voxel_changed.emit(local_pos, type)
-
+	
 func local_to_world(local_pos: Vector3) -> Vector3:
 	return local_pos + (position * CHUNK_SIZE)
 

@@ -12,6 +12,7 @@ const CHUNK_SIZE := 16
 @export var debug_color_negative_y: Color = Color(0.0, 0.5, 0.0)  # Dark Green
 @export var debug_color_positive_z: Color = Color(0.0, 0.0, 1.0)  # Blue
 @export var debug_color_negative_z: Color = Color(0.0, 0.0, 0.5)  # Dark Blue
+@export var debug_visual_normals: bool = false
 
 var active_chunks: Dictionary = {}
 var terrain_generator: TerrainGenerator

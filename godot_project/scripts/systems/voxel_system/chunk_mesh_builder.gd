@@ -126,6 +126,9 @@ func build_mesh(chunk_data: ChunkData, debug_mode: bool = false) -> MeshInstance
 		
 		mesh_instance.mesh = mesh
 		
+		if chunk_manager.debug_visual_normals:
+			visualize_normals(mesh_instance)
+			
 		# Now that mesh is committed with surfaces, we can set the materials
 		for i in range(used_directions.size()):
 			mesh_instance.set_surface_override_material(i, debug_materials[used_directions[i]])
@@ -168,6 +171,9 @@ func build_mesh(chunk_data: ChunkData, debug_mode: bool = false) -> MeshInstance
 		st.index()
 		mesh_instance.mesh = st.commit()
 		mesh_instance.material_override = material_factory.get_default_material()
+		
+		if chunk_manager.debug_visual_normals:
+			visualize_normals(mesh_instance)
 	
 	# Create collision using simplified box for performance
 	var collision = CollisionShape3D.new()
@@ -189,14 +195,15 @@ func should_add_face(pos: Vector3, chunk_data: ChunkData) -> bool:
 	
 	# If not in current chunk, find the chunk it belongs to
 	var world_pos = chunk_data.local_to_world(pos)
-	var chunk_pos = chunk_manager.get_chunk_position(world_pos)
+	var neighbor_chunk_pos = chunk_manager.get_chunk_position(world_pos)
 	
 	# Check if the neighboring chunk exists and has a voxel at this position
-	if chunk_manager.active_chunks.has(chunk_pos):
-		var neighbor = chunk_manager.active_chunks[chunk_pos].data
+	if chunk_manager.active_chunks.has(neighbor_chunk_pos):
+		var neighbor = chunk_manager.active_chunks[neighbor_chunk_pos].data
+		# Convert the world position back to local position in the neighbor chunk
 		var local_pos = neighbor.world_to_local(world_pos)
 		
-		# Ensure local position is valid
+		# Important fix: ensure local_pos is valid before checking voxel type
 		if neighbor.is_position_valid(local_pos):
 			return neighbor.get_voxel(local_pos) == VoxelTypes.Type.AIR
 	
@@ -280,59 +287,92 @@ func add_bottom_face(st: SurfaceTool, pos: Vector3, voxel_type: int) -> void:
 # NORTH FACE (+Z)
 func add_north_face(st: SurfaceTool, pos: Vector3, voxel_type: int) -> void:
 	var vertices = PackedVector3Array([
-		# First triangle
-		pos + Vector3(0, 0, 1), # Bottom left
+		# First triangle - correct counter-clockwise winding when viewed from outside
 		pos + Vector3(1, 0, 1), # Bottom right
-		pos + Vector3(1, 1, 1), # Top right
+		pos + Vector3(0, 0, 1), # Bottom left
+		pos + Vector3(0, 1, 1), # Top left
 		
 		# Second triangle
-		pos + Vector3(0, 0, 1), # Bottom left
-		pos + Vector3(1, 1, 1), # Top right
-		pos + Vector3(0, 1, 1)  # Top left
+		pos + Vector3(1, 0, 1), # Bottom right
+		pos + Vector3(0, 1, 1), # Top left
+		pos + Vector3(1, 1, 1)  # Top right
 	])
 	add_vertices(st, vertices, Vector3.FORWARD, get_uv(get_texture_pos(voxel_type, "side")))
-
+	
 # SOUTH FACE (-Z)
 func add_south_face(st: SurfaceTool, pos: Vector3, voxel_type: int) -> void:
 	var vertices = PackedVector3Array([
 		# First triangle - correct counter-clockwise winding when viewed from outside
-		pos + Vector3(1, 0, 0), # Bottom right
-		pos + Vector3(0, 0, 0), # Bottom left
-		pos + Vector3(0, 1, 0), # Top left
+		pos + Vector3(0, 0, 0),  # Bottom left
+		pos + Vector3(1, 0, 0),  # Bottom right
+		pos + Vector3(1, 1, 0),  # Top right
 		
 		# Second triangle
-		pos + Vector3(1, 0, 0), # Bottom right
-		pos + Vector3(0, 1, 0), # Top left
-		pos + Vector3(1, 1, 0)  # Top right
+		pos + Vector3(0, 0, 0),  # Bottom left
+		pos + Vector3(1, 1, 0),  # Top right
+		pos + Vector3(0, 1, 0)   # Top left
 	])
 	add_vertices(st, vertices, Vector3.BACK, get_uv(get_texture_pos(voxel_type, "side")))
+
 
 # EAST FACE (+X)
 func add_east_face(st: SurfaceTool, pos: Vector3, voxel_type: int) -> void:
 	var vertices = PackedVector3Array([
-		# First triangle
-		pos + Vector3(1, 0, 1), # Bottom back
-		pos + Vector3(1, 0, 0), # Bottom front
-		pos + Vector3(1, 1, 0), # Top front
+		# First triangle - correct counter-clockwise winding when viewed from outside
+		pos + Vector3(1, 0, 0),  # Bottom front
+		pos + Vector3(1, 0, 1),  # Bottom back
+		pos + Vector3(1, 1, 1),  # Top back
 		
 		# Second triangle
-		pos + Vector3(1, 0, 1), # Bottom back
-		pos + Vector3(1, 1, 0), # Top front
-		pos + Vector3(1, 1, 1)  # Top back
+		pos + Vector3(1, 0, 0),  # Bottom front
+		pos + Vector3(1, 1, 1),  # Top back
+		pos + Vector3(1, 1, 0)   # Top front
 	])
 	add_vertices(st, vertices, Vector3.RIGHT, get_uv(get_texture_pos(voxel_type, "side")))
+
 
 # WEST FACE (-X)
 func add_west_face(st: SurfaceTool, pos: Vector3, voxel_type: int) -> void:
 	var vertices = PackedVector3Array([
-		# First triangle
-		pos + Vector3(0, 0, 0), # Bottom front
-		pos + Vector3(0, 0, 1), # Bottom back
-		pos + Vector3(0, 1, 1), # Top back
+		# First triangle - correct counter-clockwise winding when viewed from outside
+		pos + Vector3(0, 0, 1),  # Bottom back
+		pos + Vector3(0, 0, 0),  # Bottom front
+		pos + Vector3(0, 1, 0),  # Top front
 		
 		# Second triangle
-		pos + Vector3(0, 0, 0), # Bottom front
-		pos + Vector3(0, 1, 1), # Top back
-		pos + Vector3(0, 1, 0)  # Top front
+		pos + Vector3(0, 0, 1),  # Bottom back
+		pos + Vector3(0, 1, 0),  # Top front
+		pos + Vector3(0, 1, 1)   # Top back
 	])
 	add_vertices(st, vertices, Vector3.LEFT, get_uv(get_texture_pos(voxel_type, "side")))
+
+# Add this to your mesh building function to visualize the normals
+func visualize_normals(mesh_instance: MeshInstance3D) -> void:
+	var mesh = mesh_instance.mesh
+	var imm = ImmediateMesh.new()
+	var normal_vis = MeshInstance3D.new()
+	normal_vis.mesh = imm
+	
+	var mat = StandardMaterial3D.new()
+	mat.albedo_color = Color(1, 1, 0) # Yellow
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	normal_vis.material_override = mat
+	
+	for s in range(mesh.get_surface_count()):
+		var array = mesh.surface_get_arrays(s)
+		var vertices = array[Mesh.ARRAY_VERTEX]
+		var normals = array[Mesh.ARRAY_NORMAL]
+		
+		imm.clear_surfaces()
+		imm.surface_begin(Mesh.PRIMITIVE_LINES)
+		
+		for i in range(vertices.size()):
+			if i % 3 == 0: # Only show one normal per triangle
+				var pos = vertices[i]
+				var normal = normals[i]
+				imm.surface_add_vertex(pos)
+				imm.surface_add_vertex(pos + normal) # Scale normal for visibility
+		
+		imm.surface_end()
+	
+	mesh_instance.add_child(normal_vis)
