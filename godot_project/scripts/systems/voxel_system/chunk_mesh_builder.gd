@@ -257,12 +257,12 @@ func add_vertices(st: SurfaceTool, vertices: PackedVector3Array, normal: Vector3
 # TOP FACE (+Y)
 func add_top_face(st: SurfaceTool, pos: Vector3, voxel_type: int) -> void:
 	var vertices = PackedVector3Array([
-		# First triangle - bottom left, bottom right, top right
+		# First triangle - correct counter-clockwise winding when viewed from above
 		pos + Vector3(0, 1, 0), # Bottom left
 		pos + Vector3(1, 1, 0), # Bottom right
 		pos + Vector3(1, 1, 1), # Top right
 		
-		# Second triangle - bottom left, top right, top left
+		# Second triangle
 		pos + Vector3(0, 1, 0), # Bottom left
 		pos + Vector3(1, 1, 1), # Top right
 		pos + Vector3(0, 1, 1)  # Top left
@@ -272,77 +272,75 @@ func add_top_face(st: SurfaceTool, pos: Vector3, voxel_type: int) -> void:
 # BOTTOM FACE (-Y)
 func add_bottom_face(st: SurfaceTool, pos: Vector3, voxel_type: int) -> void:
 	var vertices = PackedVector3Array([
-		# First triangle - matches a counter-clockwise winding when viewed from below
-		pos + Vector3(0, 0, 1), # Top left
-		pos + Vector3(1, 0, 1), # Top right 
+		# First triangle - correct counter-clockwise winding when viewed from below
+		pos + Vector3(0, 0, 0), # Bottom left
+		pos + Vector3(1, 0, 1), # Top right
 		pos + Vector3(1, 0, 0), # Bottom right
 		
 		# Second triangle
+		pos + Vector3(0, 0, 0), # Bottom left
 		pos + Vector3(0, 0, 1), # Top left
-		pos + Vector3(1, 0, 0), # Bottom right
-		pos + Vector3(0, 0, 0)  # Bottom left
+		pos + Vector3(1, 0, 1)  # Top right
 	])
 	add_vertices(st, vertices, Vector3.DOWN, get_uv(get_texture_pos(voxel_type, "bottom")))
 
 # NORTH FACE (+Z)
 func add_north_face(st: SurfaceTool, pos: Vector3, voxel_type: int) -> void:
 	var vertices = PackedVector3Array([
-		# First triangle - correct counter-clockwise winding when viewed from outside
-		pos + Vector3(1, 0, 1), # Bottom right
+		# First triangle
 		pos + Vector3(0, 0, 1), # Bottom left
-		pos + Vector3(0, 1, 1), # Top left
+		pos + Vector3(1, 0, 1), # Bottom right
+		pos + Vector3(1, 1, 1), # Top right
 		
 		# Second triangle
-		pos + Vector3(1, 0, 1), # Bottom right
-		pos + Vector3(0, 1, 1), # Top left
-		pos + Vector3(1, 1, 1)  # Top right
+		pos + Vector3(0, 0, 1), # Bottom left
+		pos + Vector3(1, 1, 1), # Top right
+		pos + Vector3(0, 1, 1)  # Top left
 	])
 	add_vertices(st, vertices, Vector3.FORWARD, get_uv(get_texture_pos(voxel_type, "side")))
-	
+
 # SOUTH FACE (-Z)
 func add_south_face(st: SurfaceTool, pos: Vector3, voxel_type: int) -> void:
 	var vertices = PackedVector3Array([
-		# First triangle - correct counter-clockwise winding when viewed from outside
-		pos + Vector3(0, 0, 0),  # Bottom left
-		pos + Vector3(1, 0, 0),  # Bottom right
-		pos + Vector3(1, 1, 0),  # Top right
+		# First triangle
+		pos + Vector3(1, 0, 0), # Bottom right
+		pos + Vector3(0, 0, 0), # Bottom left
+		pos + Vector3(0, 1, 0), # Top left
 		
 		# Second triangle
-		pos + Vector3(0, 0, 0),  # Bottom left
-		pos + Vector3(1, 1, 0),  # Top right
-		pos + Vector3(0, 1, 0)   # Top left
+		pos + Vector3(1, 0, 0), # Bottom right
+		pos + Vector3(0, 1, 0), # Top left
+		pos + Vector3(1, 1, 0)  # Top right
 	])
 	add_vertices(st, vertices, Vector3.BACK, get_uv(get_texture_pos(voxel_type, "side")))
-
 
 # EAST FACE (+X)
 func add_east_face(st: SurfaceTool, pos: Vector3, voxel_type: int) -> void:
 	var vertices = PackedVector3Array([
-		# First triangle - correct counter-clockwise winding when viewed from outside
-		pos + Vector3(1, 0, 0),  # Bottom front
-		pos + Vector3(1, 0, 1),  # Bottom back
-		pos + Vector3(1, 1, 1),  # Top back
+		# First triangle
+		pos + Vector3(1, 0, 1), # Bottom back
+		pos + Vector3(1, 0, 0), # Bottom front
+		pos + Vector3(1, 1, 0), # Top front
 		
 		# Second triangle
-		pos + Vector3(1, 0, 0),  # Bottom front
-		pos + Vector3(1, 1, 1),  # Top back
-		pos + Vector3(1, 1, 0)   # Top front
+		pos + Vector3(1, 0, 1), # Bottom back
+		pos + Vector3(1, 1, 0), # Top front
+		pos + Vector3(1, 1, 1)  # Top back
 	])
 	add_vertices(st, vertices, Vector3.RIGHT, get_uv(get_texture_pos(voxel_type, "side")))
-
 
 # WEST FACE (-X)
 func add_west_face(st: SurfaceTool, pos: Vector3, voxel_type: int) -> void:
 	var vertices = PackedVector3Array([
-		# First triangle - correct counter-clockwise winding when viewed from outside
-		pos + Vector3(0, 0, 1),  # Bottom back
-		pos + Vector3(0, 0, 0),  # Bottom front
-		pos + Vector3(0, 1, 0),  # Top front
+		# First triangle
+		pos + Vector3(0, 0, 0), # Bottom front
+		pos + Vector3(0, 0, 1), # Bottom back
+		pos + Vector3(0, 1, 1), # Top back
 		
 		# Second triangle
-		pos + Vector3(0, 0, 1),  # Bottom back
-		pos + Vector3(0, 1, 0),  # Top front
-		pos + Vector3(0, 1, 1)   # Top back
+		pos + Vector3(0, 0, 0), # Bottom front
+		pos + Vector3(0, 1, 1), # Top back
+		pos + Vector3(0, 1, 0)  # Top front
 	])
 	add_vertices(st, vertices, Vector3.LEFT, get_uv(get_texture_pos(voxel_type, "side")))
 
