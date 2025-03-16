@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voxel Face Visualizer</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        canvas {
+            border: 1px solid #ccc;
+            margin: 20px 0;
+        }
+        .controls {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        .face-buttons {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 5px;
+        }
+        button {
+            padding: 8px 12px;
+            cursor: pointer;
+        }
+        .selected {
+            background-color: #4CAF50;
+            color: white;
+        }
+        .coordinates {
+            font-family: monospace;
+            margin-top: 20px;
+            background-color: #f5f5f5;
+            padding: 10px;
+            border-radius: 5px;
+        }
+        #vertexOrder {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            margin-top: 10px;
+        }
+        .vertex {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .vertex-number {
+            width: 20px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            background-color: #007bff;
+            color: white;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <h1>Voxel Face Visualizer</h1>
+    
+    <div class="controls">
+        <div>
+            <h3>Select Face to Visualize</h3>
+            <div class="face-buttons">
+                <button id="none"></button>
+                <button id="top">Top</button>
+                <button id="none2"></button>
+                <button id="west">West</button>
+                <button id="north" class="selected">North</button>
+                <button id="east">East</button>
+                <button id="none3"></button>
+                <button id="bottom">Bottom</button>
+                <button id="south">South</button>
+            </div>
+        </div>
+        
+        <div>
+            <h3>Viewing Options</h3>
+            <div>
+                <label>
+                    <input type="checkbox" id="showAxes" checked> Show Axes
+                </label>
+            </div>
+            <div>
+                <label>
+                    <input type="checkbox" id="showVoxel" checked> Show Voxel
+                </label>
+            </div>
+            <div>
+                <label>
+                    <input type="checkbox" id="showVertexNumbers" checked> Show Vertex Numbers
+                </label>
+            </div>
+            <div>
+                <label>
+                    <input type="checkbox" id="showTriangles" checked> Show Triangles
+                </label>
+            </div>
+            <div>
+                <button id="rotateCamera">Rotate Camera</button>
+            </div>
+        </div>
+    </div>
+
+    <canvas id="canvas" width="600" height="400"></canvas>
+    
+    <div class="coordinates">
+        <h3>Vertex Coordinates (X, Y, Z)</h3>
+        <div id="vertexOrder"></div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        // Define faces
+        const faces = {
+            north: {
+                name: "North (+Z)",
+                vertices: [
+                    { pos: [0, 0, 1], label: "Bottom Left" },
+                    { pos: [1, 0, 1], label: "Bottom Right" },
+                    { pos: [1, 1, 1], label: "Top Right" },
+                    { pos: [0, 0, 1], label: "Bottom Left" },
+                    { pos: [1, 1, 1], label: "Top Right" },
+                    { pos: [0, 1, 1], label: "Top Left" }
+                ],
+                normal: [0, 0, 1],
+                color: 'rgba(0, 255, 0, 0.7)'
+            },
+            south: {
+                name: "South (-Z)",
+                vertices: [
+                    { pos: [1, 0, 0], label: "Bottom Right" },
+                    { pos: [0, 0, 0], label: "Bottom Left" },
+                    { pos: [0, 1, 0], label: "Top Left" },
+                    { pos: [1, 0, 0], label: "Bottom Right" },
+                    { pos: [0, 1, 0], label: "Top Left" },
+                    { pos: [1, 1, 0], label: "Top Right" }
+                ],
+                normal: [0, 0, -1],
+                color: 'rgba(0, 0, 255, 0.7)'
+            },
+            east: {
+                name: "East (+X)",
+                vertices: [
+                    { pos: [1, 0, 1], label: "Bottom Back" },
+                    { pos: [1, 0, 0], label: "Bottom Front" },
+                    { pos: [1, 1, 0], label: "Top Front" },
+                    { pos: [1, 0, 1], label: "Bottom Back" },
+                    { pos: [1, 1, 0], label: "Top Front" },
+                    { pos: [1, 1, 1], label: "Top Back" }
+                ],
+                normal: [1, 0, 0],
+                color: 'rgba(255, 0, 0, 0.7)'
+            },
+            west: {
+                name: "West (-X)",
+                vertices: [
+                    { pos: [0, 0, 0], label: "Bottom Front" },
+                    { pos: [0, 0, 1], label: "Bottom Back" },
+                    { pos: [0, 1, 1], label: "Top Back" },
+                    { pos: [0, 0, 0], label: "Bottom Front" },
+                    { pos: [0, 1, 1], label: "Top Back" },
+                    { pos: [0, 1, 0], label: "Top Front" }
+                ],
+                normal: [-1, 0, 0],
+                color: 'rgba(255, 165, 0, 0.7)'
+            },
+            top: {
+                name: "Top (+Y)",
+                vertices: [
+                    { pos: [0, 1, 0], label: "Bottom Left" },
+                    { pos: [1, 1, 0], label: "Bottom Right" },
+                    { pos: [1, 1, 1], label: "Top Right" },
+                    { pos: [0, 1, 0], label: "Bottom Left" },
+                    { pos: [1, 1, 1], label: "Top Right" },
+                    { pos: [0, 1, 1], label: "Top Left" }
+                ],
+                normal: [0, 1, 0],
+                color: 'rgba(255, 255, 0, 0.7)'
+            },
+            bottom: {
+                name: "Bottom (-Y)",
+                vertices: [
+                    { pos: [0, 0, 1], label: "Top Left" },
+                    { pos: [1, 0, 1], label: "Top Right" },
+                    { pos: [1, 0, 0], label: "Bottom Right" },
+                    { pos: [0, 0, 1], label: "Top Left" },
+                    { pos: [1, 0, 0], label: "Bottom Right" },
+                    { pos: [0, 0, 0], label: "Bottom Left" }
+                ],
+                normal: [0, -1, 0],
+                color: 'rgba(128, 0, 128, 0.7)'
+            }
+        };
+        
+        let currentFace = 'north';
+        let cameraAngle = 0;
+        let isRotating = false;
+        
+        // Setup buttons
+        Object.keys(faces).forEach(face => {
+            const button = document.getElementById(face);
+            if (button) {
+                button.addEventListener('click', () => {
+                    document.querySelectorAll('.face-buttons button').forEach(b => b.classList.remove('selected'));
+                    button.classList.add('selected');
+                    currentFace = face;
+                    updateDisplay();
+                });
+            }
+        });
+        
+        // Setup checkboxes
+        document.getElementById('showAxes').addEventListener('change', updateDisplay);
+        document.getElementById('showVoxel').addEventListener('change', updateDisplay);
+        document.getElementById('showVertexNumbers').addEventListener('change', updateDisplay);
+        document.getElementById('showTriangles').addEventListener('change', updateDisplay);
+        
+        // Setup rotation
+        document.getElementById('rotateCamera').addEventListener('click', () => {
+            isRotating = !isRotating;
+            if (isRotating) {
+                rotateAnimation();
+                document.getElementById('rotateCamera').textContent = 'Stop Rotation';
+            } else {
+                document.getElementById('rotateCamera').textContent = 'Rotate Camera';
+            }
+        });
+        
+        function rotateAnimation() {
+            if (!isRotating) return;
+            cameraAngle += 0.02;
+            updateDisplay();
+            requestAnimationFrame(rotateAnimation);
+        }
+        
+        function updateDisplay() {
+            drawScene();
+            updateVertexDisplay();
+        }
+        
+        function drawScene() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Setup 3D projection
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+            const scale = 100;
+            
+            // Define camera position
+            const camX = Math.sin(cameraAngle) * 3;
+            const camY = 1.5;
+            const camZ = Math.cos(cameraAngle) * 3;
+            
+            // Draw coordinate system
+            if (document.getElementById('showAxes').checked) {
+                drawAxes(centerX, centerY, scale, camX, camY, camZ);
+            }
+            
+            // Draw voxel
+            if (document.getElementById('showVoxel').checked) {
+                drawVoxel(centerX, centerY, scale, camX, camY, camZ);
+            }
+            
+            // Draw the current face
+            const face = faces[currentFace];
+            drawFace(face, centerX, centerY, scale, camX, camY, camZ);
+        }
+        
+        function project(x, y, z, camX, camY, camZ, centerX, centerY, scale) {
+            // Calculate the projected 2D coordinates
+            const dx = x - camX;
+            const dy = y - camY;
+            const dz = z - camZ;
+            
+            // Simple perspective projection
+            const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+            const factor = 1 / (distance * 0.1 + 0.5);
+            
+            // Project 3D to 2D
+            const px = centerX + (dx * scale * factor);
+            const py = centerY - (dy * scale * factor);  // Invert Y for screen coordinates
+            
+            return { x: px, y: py, z: distance };
+        }
+        
+        function drawAxes(centerX, centerY, scale, camX, camY, camZ) {
+            const axisLength = 1.5;
+            
+            // X axis (red)
+            ctx.strokeStyle = 'red';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            const origin = project(0, 0, 0, camX, camY, camZ, centerX, centerY, scale);
+            const xEnd = project(axisLength, 0, 0, camX, camY, camZ, centerX, centerY, scale);
+            ctx.moveTo(origin.x, origin.y);
+            ctx.lineTo(xEnd.x, xEnd.y);
+            ctx.stroke();
+            ctx.fillStyle = 'red';
+            ctx.fillText('X', xEnd.x, xEnd.y);
+            
+            // Y axis (green)
+            ctx.strokeStyle = 'green';
+            ctx.beginPath();
+            const yEnd = project(0, axisLength, 0, camX, camY, camZ, centerX, centerY, scale);
+            ctx.moveTo(origin.x, origin.y);
+            ctx.lineTo(yEnd.x, yEnd.y);
+            ctx.stroke();
+            ctx.fillStyle = 'green';
+            ctx.fillText('Y', yEnd.x, yEnd.y);
+            
+            // Z axis (blue)
+            ctx.strokeStyle = 'blue';
+            ctx.beginPath();
+            const zEnd = project(0, 0, axisLength, camX, camY, camZ, centerX, centerY, scale);
+            ctx.moveTo(origin.x, origin.y);
+            ctx.lineTo(zEnd.x, zEnd.y);
+            ctx.stroke();
+            ctx.fillStyle = 'blue';
+            ctx.fillText('Z', zEnd.x, zEnd.y);
+        }
+        
+        function drawVoxel(centerX, centerY, scale, camX, camY, camZ) {
+            const vertices = [
+                [0, 0, 0], [1, 0, 0], [1, 1, 0], [0, 1, 0],
+                [0, 0, 1], [1, 0, 1], [1, 1, 1], [0, 1, 1]
+            ];
+            
+            const edges = [
+                [0, 1], [1, 2], [2, 3], [3, 0],
+                [4, 5], [5, 6], [6, 7], [7, 4],
+                [0, 4], [1, 5], [2, 6], [3, 7]
+            ];
+            
+            // Draw edges
+            ctx.strokeStyle = 'rgba(100, 100, 100, 0.5)';
+            ctx.lineWidth = 1;
+            
+            for (const [i, j] of edges) {
+                const v1 = project(vertices[i][0], vertices[i][1], vertices[i][2], camX, camY, camZ, centerX, centerY, scale);
+                const v2 = project(vertices[j][0], vertices[j][1], vertices[j][2], camX, camY, camZ, centerX, centerY, scale);
+                
+                ctx.beginPath();
+                ctx.moveTo(v1.x, v1.y);
+                ctx.lineTo(v2.x, v2.y);
+                ctx.stroke();
+            }
+        }
+        
+        function drawFace(face, centerX, centerY, scale, camX, camY, camZ) {
+            const vertices = face.vertices;
+            const showVertexNumbers = document.getElementById('showVertexNumbers').checked;
+            const showTriangles = document.getElementById('showTriangles').checked;
+            
+            // Calculate projected points
+            const projectedPoints = vertices.map(v => {
+                const [x, y, z] = v.pos;
+                return {
+                    ...v,
+                    projected: project(x, y, z, camX, camY, camZ, centerX, centerY, scale)
+                };
+            });
+            
+            // Sort by distance for proper overlap
+            projectedPoints.sort((a, b) => a.projected.z - b.projected.z);
+            
+            // Draw triangles
+            if (showTriangles) {
+                for (let i = 0; i < projectedPoints.length; i += 3) {
+                    if (i + 2 < projectedPoints.length) {
+                        const p1 = projectedPoints[i].projected;
+                        const p2 = projectedPoints[i + 1].projected;
+                        const p3 = projectedPoints[i + 2].projected;
+                        
+                        ctx.fillStyle = face.color;
+                        ctx.beginPath();
+                        ctx.moveTo(p1.x, p1.y);
+                        ctx.lineTo(p2.x, p2.y);
+                        ctx.lineTo(p3.x, p3.y);
+                        ctx.closePath();
+                        ctx.fill();
+                        
+                        // Draw triangle outlines
+                        ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
+                        ctx.lineWidth = 1;
+                        ctx.stroke();
+                    }
+                }
+            }
+            
+            // Draw vertex numbers
+            if (showVertexNumbers) {
+                for (let i = 0; i < projectedPoints.length; i++) {
+                    const p = projectedPoints[i].projected;
+                    ctx.fillStyle = 'white';
+                    ctx.strokeStyle = 'black';
+                    ctx.lineWidth = 3;
+                    ctx.font = 'bold 14px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    
+                    // Draw circle background
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, 10, 0, Math.PI * 2);
+                    ctx.fillStyle = '#007bff';
+                    ctx.fill();
+                    
+                    // Draw number
+                    ctx.fillStyle = 'white';
+                    ctx.fillText(i.toString(), p.x, p.y);
+                }
+            }
+        }
+        
+        function updateVertexDisplay() {
+            const face = faces[currentFace];
+            const vertexOrderElement = document.getElementById('vertexOrder');
+            vertexOrderElement.innerHTML = `<h4>${face.name} Face</h4>`;
+            
+            for (let i = 0; i < face.vertices.length; i++) {
+                const vertex = face.vertices[i];
+                const vertexDiv = document.createElement('div');
+                vertexDiv.className = 'vertex';
+                
+                const vertexNumber = document.createElement('div');
+                vertexNumber.className = 'vertex-number';
+                vertexNumber.textContent = i;
+                
+                const vertexCoords = document.createElement('div');
+                vertexCoords.innerHTML = `<strong>Vector3${vertex.pos}:</strong> ${vertex.label}`;
+                
+                vertexDiv.appendChild(vertexNumber);
+                vertexDiv.appendChild(vertexCoords);
+                vertexOrderElement.appendChild(vertexDiv);
+            }
+        }
+        
+        // Initial display
+        updateDisplay();
+    </script>
+</body>
+</html>

@@ -13,58 +13,163 @@ const UV_GRASS_SIDE := Vector2(3, 0)
 
 var material_factory: MaterialFactory
 var chunk_manager: ChunkManager
+var debug_materials: Dictionary = {}
 
 func _init(mat_factory: MaterialFactory, chunk_mgr: ChunkManager) -> void:
 	material_factory = mat_factory
 	chunk_manager = chunk_mgr
+	
+func _create_debug_materials() -> void:
+	# Check if debug_materials is empty to avoid recreating them
+	if not debug_materials.is_empty():
+		return
+		
+	# Create a material for each face direction
+	debug_materials["pos_x"] = _create_colored_material(chunk_manager.debug_color_positive_x)
+	debug_materials["neg_x"] = _create_colored_material(chunk_manager.debug_color_negative_x)
+	debug_materials["pos_y"] = _create_colored_material(chunk_manager.debug_color_positive_y)
+	debug_materials["neg_y"] = _create_colored_material(chunk_manager.debug_color_negative_y)
+	debug_materials["pos_z"] = _create_colored_material(chunk_manager.debug_color_positive_z)
+	debug_materials["neg_z"] = _create_colored_material(chunk_manager.debug_color_negative_z)
 
-func build_mesh(chunk_data: ChunkData) -> MeshInstance3D:
+func _create_colored_material(color: Color) -> StandardMaterial3D:
+	var material = StandardMaterial3D.new()
+	material.albedo_color = color
+	material.roughness = 1.0
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	return material
+
+func build_mesh(chunk_data: ChunkData, debug_mode: bool = false) -> MeshInstance3D:
 	if not chunk_data or chunk_data.voxels.is_empty():
 		return null
-		
-	var st := SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	
-	for pos in chunk_data.voxels:
-		var voxel = chunk_data.get_voxel(pos)
-		if voxel == VoxelTypes.Type.AIR:
-			continue
-			
-		var world_pos = pos * VOXEL_SIZE
-		
-		# Top face (+Y)
-		if should_add_face(pos + Vector3.UP, chunk_data):
-			add_top_face(st, world_pos, voxel)
-			
-		# Bottom face (-Y)
-		if should_add_face(pos + Vector3.DOWN, chunk_data):
-			add_bottom_face(st, world_pos, voxel)
-			
-		# North face (+Z)
-		if should_add_face(pos + Vector3.FORWARD, chunk_data):
-			add_north_face(st, world_pos, voxel)
-			
-		# South face (-Z)
-		if should_add_face(pos + Vector3.BACK, chunk_data):
-			add_south_face(st, world_pos, voxel)
-			
-		# East face (+X)
-		if should_add_face(pos + Vector3.RIGHT, chunk_data):
-			add_east_face(st, world_pos, voxel)
-			
-		# West face (-X)
-		if should_add_face(pos + Vector3.LEFT, chunk_data):
-			add_west_face(st, world_pos, voxel)
-	
-	st.index()
-	var mesh = st.commit()
 	
 	var mesh_instance := MeshInstance3D.new()
-	mesh_instance.mesh = mesh
-	mesh_instance.material_override = material_factory.get_default_material()
+	
+	if debug_mode:
+		# Create debug materials if they don't already exist
+		_create_debug_materials()
+		
+		# Create a separate mesh for each face direction
+		var mesh = ArrayMesh.new()
+		
+		# Dictionary to track which directions have faces
+		var has_vertices = {
+			"pos_x": false,
+			"neg_x": false,
+			"pos_y": false,
+			"neg_y": false,
+			"pos_z": false,
+			"neg_z": false
+		}
+		
+		# Prepare surface tools for each direction
+		var surface_tools = {
+			"pos_x": SurfaceTool.new(),
+			"neg_x": SurfaceTool.new(),
+			"pos_y": SurfaceTool.new(),
+			"neg_y": SurfaceTool.new(),
+			"pos_z": SurfaceTool.new(),
+			"neg_z": SurfaceTool.new()
+		}
+		
+		for key in surface_tools:
+			surface_tools[key].begin(Mesh.PRIMITIVE_TRIANGLES)
+		
+		# Add faces to the appropriate surface tools
+		for pos in chunk_data.voxels:
+			var voxel = chunk_data.get_voxel(pos)
+			if voxel == VoxelTypes.Type.AIR:
+				continue
+				
+			var world_pos = pos * VOXEL_SIZE
+			
+			# Top face (+Y)
+			if should_add_face(pos + Vector3.UP, chunk_data):
+				add_top_face(surface_tools["pos_y"], world_pos, voxel)
+				has_vertices["pos_y"] = true
+			
+			# Bottom face (-Y)
+			if should_add_face(pos + Vector3.DOWN, chunk_data):
+				add_bottom_face(surface_tools["neg_y"], world_pos, voxel)
+				has_vertices["neg_y"] = true
+			
+			# North face (+Z)
+			if should_add_face(pos + Vector3.FORWARD, chunk_data):
+				add_north_face(surface_tools["pos_z"], world_pos, voxel)
+				has_vertices["pos_z"] = true
+			
+			# South face (-Z)
+			if should_add_face(pos + Vector3.BACK, chunk_data):
+				add_south_face(surface_tools["neg_z"], world_pos, voxel)
+				has_vertices["neg_z"] = true
+			
+			# East face (+X)
+			if should_add_face(pos + Vector3.RIGHT, chunk_data):
+				add_east_face(surface_tools["pos_x"], world_pos, voxel)
+				has_vertices["pos_x"] = true
+			
+			# West face (-X)
+			if should_add_face(pos + Vector3.LEFT, chunk_data):
+				add_west_face(surface_tools["neg_x"], world_pos, voxel)
+				has_vertices["neg_x"] = true
+		
+		# Commit surface tools that have vertices to the mesh
+		var material_idx = 0
+		var used_directions = []
+		
+		for key in surface_tools:
+			if has_vertices[key]:
+				surface_tools[key].index()
+				surface_tools[key].commit(mesh)
+				used_directions.append(key)
+				material_idx += 1
+		
+		mesh_instance.mesh = mesh
+		
+		# Now that mesh is committed with surfaces, we can set the materials
+		for i in range(used_directions.size()):
+			mesh_instance.set_surface_override_material(i, debug_materials[used_directions[i]])
+	else:
+		# Non-debug mode - use a single surface tool
+		var st = SurfaceTool.new()
+		st.begin(Mesh.PRIMITIVE_TRIANGLES)
+		
+		for pos in chunk_data.voxels:
+			var voxel = chunk_data.get_voxel(pos)
+			if voxel == VoxelTypes.Type.AIR:
+				continue
+				
+			var world_pos = pos * VOXEL_SIZE
+			
+			# Top face (+Y)
+			if should_add_face(pos + Vector3.UP, chunk_data):
+				add_top_face(st, world_pos, voxel)
+			
+			# Bottom face (-Y)
+			if should_add_face(pos + Vector3.DOWN, chunk_data):
+				add_bottom_face(st, world_pos, voxel)
+			
+			# North face (+Z)
+			if should_add_face(pos + Vector3.FORWARD, chunk_data):
+				add_north_face(st, world_pos, voxel)
+			
+			# South face (-Z)
+			if should_add_face(pos + Vector3.BACK, chunk_data):
+				add_south_face(st, world_pos, voxel)
+			
+			# East face (+X)
+			if should_add_face(pos + Vector3.RIGHT, chunk_data):
+				add_east_face(st, world_pos, voxel)
+			
+			# West face (-X)
+			if should_add_face(pos + Vector3.LEFT, chunk_data):
+				add_west_face(st, world_pos, voxel)
+		
+		st.index()
+		mesh_instance.mesh = st.commit()
+		mesh_instance.material_override = material_factory.get_default_material()
 	
 	# Create collision using simplified box for performance
-	# In production, you might want to generate a more accurate collision shape
 	var collision = CollisionShape3D.new()
 	var shape = BoxShape3D.new()
 	shape.size = Vector3(16, 16, 16)
@@ -84,31 +189,18 @@ func should_add_face(pos: Vector3, chunk_data: ChunkData) -> bool:
 	
 	# If not in current chunk, find the chunk it belongs to
 	var world_pos = chunk_data.local_to_world(pos)
-	var chunk_pos = Vector3(
-		floori(world_pos.x / ChunkData.CHUNK_SIZE),
-		floori(world_pos.y / ChunkData.CHUNK_SIZE),
-		floori(world_pos.z / ChunkData.CHUNK_SIZE)
-	)
+	var chunk_pos = chunk_manager.get_chunk_position(world_pos)
 	
 	# Check if the neighboring chunk exists and has a voxel at this position
 	if chunk_manager.active_chunks.has(chunk_pos):
 		var neighbor = chunk_manager.active_chunks[chunk_pos].data
-		# Calculate the local position within the neighboring chunk
-		# Using int() to ensure we're dealing with integer positions
-		var local_pos = Vector3(
-			int(world_pos.x) % ChunkData.CHUNK_SIZE,
-			int(world_pos.y) % ChunkData.CHUNK_SIZE,
-			int(world_pos.z) % ChunkData.CHUNK_SIZE
-		)
+		var local_pos = neighbor.world_to_local(world_pos)
 		
-		# Handle negative coordinates properly
-		if local_pos.x < 0: local_pos.x += ChunkData.CHUNK_SIZE
-		if local_pos.y < 0: local_pos.y += ChunkData.CHUNK_SIZE
-		if local_pos.z < 0: local_pos.z += ChunkData.CHUNK_SIZE
-		
-		return neighbor.get_voxel(local_pos) == VoxelTypes.Type.AIR
+		# Ensure local position is valid
+		if neighbor.is_position_valid(local_pos):
+			return neighbor.get_voxel(local_pos) == VoxelTypes.Type.AIR
 	
-	# If neighboring chunk doesn't exist, assume it's air
+	# If neighboring chunk doesn't exist or position is invalid, assume it's air
 	return true
 
 # Gets UV coordinates for a specific texture position in the atlas

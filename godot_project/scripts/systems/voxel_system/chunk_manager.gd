@@ -4,6 +4,15 @@ extends Node3D
 const RENDER_DISTANCE := 4
 const CHUNK_SIZE := 16
 
+# Debug settings
+@export var debug_mode: bool = false
+@export var debug_color_positive_x: Color = Color(1.0, 0.0, 0.0)  # Red
+@export var debug_color_negative_x: Color = Color(0.5, 0.0, 0.0)  # Dark Red
+@export var debug_color_positive_y: Color = Color(0.0, 1.0, 0.0)  # Green
+@export var debug_color_negative_y: Color = Color(0.0, 0.5, 0.0)  # Dark Green
+@export var debug_color_positive_z: Color = Color(0.0, 0.0, 1.0)  # Blue
+@export var debug_color_negative_z: Color = Color(0.0, 0.0, 0.5)  # Dark Blue
+
 var active_chunks: Dictionary = {}
 var terrain_generator: TerrainGenerator
 var mesh_builder: ChunkMeshBuilder
@@ -60,7 +69,7 @@ func create_chunk(chunk_pos: Vector3) -> void:
 	if not chunk_data:
 		return
 		
-	var mesh_instance = mesh_builder.build_mesh(chunk_data)
+	var mesh_instance = mesh_builder.build_mesh(chunk_data, debug_mode)
 	if not mesh_instance:
 		return
 		

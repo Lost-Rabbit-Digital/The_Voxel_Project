@@ -24,12 +24,12 @@ func set_voxel(local_pos: Vector3, type: VoxelTypes.Type) -> void:
 	needs_remesh = true
 	voxel_changed.emit(local_pos, type)
 
-func world_to_local(world_pos: Vector3) -> Vector3:
-	return world_pos - (position * CHUNK_SIZE)
-
 func local_to_world(local_pos: Vector3) -> Vector3:
 	return local_pos + (position * CHUNK_SIZE)
 
+func world_to_local(world_pos: Vector3) -> Vector3:
+	return world_pos - (position * CHUNK_SIZE)
+	
 func is_position_valid(pos: Vector3) -> bool:
 	return pos.x >= 0 and pos.x < CHUNK_SIZE and \
 		   pos.y >= 0 and pos.y < CHUNK_SIZE and \
