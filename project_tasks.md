@@ -1,6 +1,8 @@
 # Steel and Cube - Project Tasks
 
-> **Project Vision:** Alpha Minecraft meets Daggerfall - A voxel-based first-person RPG with deep character progression, dungeon crawling, and sandbox building.
+> **Project Vision:** A multiplayer voxel RPG that fuses Minecraft's sandbox building, Daggerfall's deep RPG mechanics, and Stardew Valley's farming & ranching. Explore an infinite living world with dynamic seasons, weather, scattered dungeons, villages, and farms. Build together, farm together, adventure together.
+>
+> **Engine:** Godot 4.5 | **Platform:** Steam (Early Access → Full Release) | **Multiplayer:** Terraria-style (Host or Join, Multiple Characters/Worlds)
 
 **Legend:**
 - ✅ Complete
@@ -52,9 +54,241 @@
 
 ---
 
-## Phase 2: Daggerfall-Style RPG Systems
+## Phase 2: Texture Atlas System (Minecraft Beta 1.7 Style)
 
-### 2.1 Character System
+### 2.1 Atlas Architecture
+
+- [ ] ⏳ Design texture atlas layout (512x512 or 256x256)
+- [ ] ⏳ Create default vanilla texture atlas
+- [ ] ⏳ Implement single texture binding for all terrain
+- [ ] ⏳ 16x16 pixel base resolution per texture tile
+- [ ] ⏳ UV coordinate mapping system
+- [ ] ⏳ Support for different block faces (top, sides, bottom)
+- [ ] ⏳ Animated texture support (water, lava, torches)
+
+### 2.2 Resource Pack System
+
+- [ ] ⏳ Create resource pack folder structure
+- [ ] ⏳ Implement pack.json metadata parser
+- [ ] ⏳ Implement blocks.json UV mapping parser
+- [ ] ⏳ Texture atlas loader (PNG/image loading)
+- [ ] ⏳ Validation system for resource packs
+- [ ] ⏳ Fallback to default textures on error
+- [ ] ⏳ Hot-reload texture packs without restart
+
+### 2.3 Technical Features
+
+- [ ] ⏳ Mipmap generation for distant textures
+- [ ] ⏳ Point filtering for pixel-art aesthetic
+- [ ] ⏳ Alpha channel support (glass, leaves, water)
+- [ ] ⏳ Texture animation system (frame-based)
+- [ ] ⏳ Item icon rendering from atlas
+- [ ] ⏳ UI element textures in atlas
+- [ ] ⏳ Resource pack selection menu
+
+### 2.4 Default Content
+
+- [ ] ⏳ Create default block textures (dirt, grass, stone, wood, etc.)
+- [ ] ⏳ Create default item textures
+- [ ] ⏳ Create default UI textures
+- [ ] ⏳ Document texture atlas coordinates
+- [ ] ⏳ Create example resource pack
+
+---
+
+## Phase 3: Dynamic World Systems
+
+### 3.1 Day/Night Cycle
+
+- [ ] ⏳ Implement time progression system
+- [ ] ⏳ 24-minute day/night cycle (configurable)
+- [ ] ⏳ Sun/moon position calculation
+- [ ] ⏳ Celestial body rendering (sun, moon, stars)
+- [ ] ⏳ Dynamic skybox color changes
+- [ ] ⏳ Sunlight intensity changes throughout day
+- [ ] ⏳ Time phases (dawn, day, dusk, night)
+- [ ] ⏳ Sleep system (beds skip to morning)
+- [ ] ⏳ Multiplayer sleep voting
+- [ ] ⏳ Time display on HUD
+
+### 3.2 Weather System
+
+- [ ] ⏳ Create weather state machine
+- [ ] ⏳ Weather types (clear, cloudy, rain, thunderstorm, snow, fog, sandstorm)
+- [ ] ⏳ Weather transition system
+- [ ] ⏳ Biome-specific weather rules
+- [ ] ⏳ Rain particle effects
+- [ ] ⏳ Snow particle effects
+- [ ] ⏳ Lightning strikes (random)
+- [ ] ⏳ Thunder sound effects
+- [ ] ⏳ Rain/snow sound loops
+- [ ] ⏳ Weather affects lighting (darker during storms)
+- [ ] ⏳ Rain extinguishes open torches
+- [ ] ⏳ Snow accumulation on blocks
+- [ ] ⏳ Weather display on HUD
+
+### 3.3 Seasonal System
+
+- [ ] ⏳ Implement calendar system (days, seasons, years)
+- [ ] ⏳ Four seasons: Spring, Summer, Autumn, Winter
+- [ ] ⏳ Season length configuration (default: 4 in-game days each)
+- [ ] ⏳ Grass color changes by season
+- [ ] ⏳ Leaf color changes (green → orange/red → bare)
+- [ ] ⏳ Snow coverage in winter
+- [ ] ⏳ Water freezing in winter
+- [ ] ⏳ Seasonal weather probabilities
+- [ ] ⏳ Day length changes by season
+- [ ] ⏳ Crop growth affected by season
+- [ ] ⏳ Animal spawn rates by season
+- [ ] ⏳ Flower/plant spawning by season
+- [ ] ⏳ Season display on HUD
+- [ ] ⏳ Year counter
+
+### 3.4 Environmental Systems
+
+- [ ] ⏳ Sunlight propagation through blocks
+- [ ] ⏳ Block light sources (torches, lava, glowstone)
+- [ ] ⏳ Smooth lighting between blocks
+- [ ] ⏳ Shadow rendering from sun/moon
+- [ ] ⏳ Night vision effect (potions/spells)
+- [ ] ⏳ Fog rendering for atmosphere
+- [ ] ⏳ Temperature system (optional hardcore feature)
+- [ ] ⏳ Biome temperature mapping
+- [ ] ⏳ Temperature affects player (cold/heat damage)
+
+---
+
+## Phase 4: Multiplayer System
+
+### 4.1 Networking Architecture (Terraria-Style)
+
+- [ ] ⏳ Godot 4.5 built-in networking (ENet/WebRTC)
+- [ ] ⏳ Host & Play mode (peer-to-peer, host acts as server)
+- [ ] ⏳ Join Game mode (LAN discovery and direct IP)
+- [ ] ⏳ Dedicated server option (headless, advanced)
+- [ ] ⏳ Character selection screen (multiple characters per player)
+- [ ] ⏳ World selection screen (multiple worlds, show metadata)
+- [ ] ⏳ Character save/load system (separate from world)
+- [ ] ⏳ World save/load system (separate from character)
+- [ ] ⏳ LAN game discovery
+- [ ] ⏳ Direct connect by IP interface
+
+### 4.2 Player Synchronization
+
+- [ ] ⏳ Player position and rotation sync
+- [ ] ⏳ Player animation sync
+- [ ] ⏳ Player inventory sync
+- [ ] ⏳ Player stats sync
+- [ ] ⏳ Equipment sync (visible armor/weapons on other players)
+- [ ] ⏳ Player username display above head
+- [ ] ⏳ Player list UI (Tab key)
+- [ ] ⏳ Lag compensation and prediction
+
+### 4.3 World Synchronization
+
+- [ ] ⏳ Block place/break synchronization
+- [ ] ⏳ Chunk streaming to new players
+- [ ] ⏳ Entity spawn synchronization
+- [ ] ⏳ Time/weather/season synchronization
+- [ ] ⏳ Server-authoritative validation
+- [ ] ⏳ Anti-cheat measures
+- [ ] ⏳ World save system for server
+
+### 4.4 Multiplayer Features
+
+- [ ] ⏳ Text chat system (global, local, party)
+- [ ] ⏳ Chat UI (slide-out, message history)
+- [ ] ⏳ Party system (form groups)
+- [ ] ⏳ Party UI (member list, health bars)
+- [ ] ⏳ Player markers (see friends through walls)
+- [ ] ⏳ Waypoint markers for party
+- [ ] ⏳ Trading system between players
+- [ ] ⏳ PvP toggle (server configurable)
+- [ ] ⏳ Emote system
+
+### 4.5 Server Administration
+
+- [ ] ⏳ Whitelist/blacklist system
+- [ ] ⏳ Operator permissions (admin commands)
+- [ ] ⏳ Kick/ban players
+- [ ] ⏳ Server backup system
+- [ ] ⏳ Server log files
+- [ ] ⏳ Admin panel UI
+- [ ] ⏳ Server performance monitoring
+- [ ] ⏳ Player count limits
+
+---
+
+## Phase 5: Overworld Expansion
+
+### 5.1 Biome System
+
+- [ ] ⏳ Temperature map generation
+- [ ] ⏳ Humidity/rainfall map generation
+- [ ] ⏳ Elevation-based biome selection
+- [ ] ⏳ Biome blending at borders
+- [ ] ⏳ Plains biome
+- [ ] ⏳ Forest biome (oak, birch trees)
+- [ ] ⏳ Hills biome
+- [ ] ⏳ Taiga biome (pine trees, snow patches)
+- [ ] ⏳ Tundra biome (snow, ice)
+- [ ] ⏳ Mountain biome (high elevation, stone, snow peaks)
+- [ ] ⏳ Desert biome (sand, cacti, sandstorms)
+- [ ] ⏳ Savanna biome (dry grass, acacia)
+- [ ] ⏳ Biome-specific block types
+- [ ] ⏳ Biome-specific vegetation
+
+### 5.2 Structure Generation
+
+#### Villages
+- [ ] ⏳ Village location algorithm (plains, forests)
+- [ ] ⏳ Village building templates (houses, blacksmith, inn, temple, town hall)
+- [ ] ⏳ Procedural village layout
+- [ ] ⏳ Village paths and roads
+- [ ] ⏳ NPC population spawning (10-20 NPCs)
+- [ ] ⏳ Village safe zones (no enemy spawns)
+- [ ] ⏳ Village guards
+- [ ] ⏳ Village farms and fields
+
+#### Towns
+- [ ] ⏳ Town generation (larger, rarer than villages)
+- [ ] ⏳ District system (merchant, noble, mage, thieves)
+- [ ] ⏳ Guild hall structures
+- [ ] ⏳ Town walls and gates
+- [ ] ⏳ Town NPC population (100+)
+- [ ] ⏳ Town market squares
+
+#### Dungeons
+- [ ] ⏳ Dungeon entrance placement algorithm
+- [ ] ⏳ Entrance types (cave mouths, ruins, mine shafts, crypts, towers)
+- [ ] ⏳ Visible entrance structures in overworld
+- [ ] ⏳ Entrance difficulty indicators
+- [ ] ⏳ Link overworld entrances to instanced dungeons
+
+#### Natural Structures
+- [ ] ⏳ Cave system generation (underground)
+- [ ] ⏳ Ravine generation (surface cracks)
+- [ ] ⏳ Ancient ruins (scattered structures)
+- [ ] ⏳ Abandoned mines
+- [ ] ⏳ Ore vein placement
+- [ ] ⏳ Underground lakes and lava pools
+
+### 5.3 World Persistence
+
+- [ ] ⏳ Infinite world generation (seed-based)
+- [ ] ⏳ Chunk save/load system
+- [ ] ⏳ Block modification persistence
+- [ ] ⏳ Structure state persistence
+- [ ] ⏳ NPC state persistence
+- [ ] ⏳ Time/weather/season persistence
+- [ ] ⏳ Player claim system (anti-griefing)
+- [ ] ⏳ Claim visualization
+
+---
+
+## Phase 6: Daggerfall-Style RPG Systems
+
+### 6.1 Character System
 
 #### Attributes
 - [ ] ⏳ Create `CharacterStats` class
@@ -88,7 +322,7 @@
 - [ ] ⏳ Birth sign/zodiac selection (passive bonuses)
 - [ ] ⏳ Appearance customization (if desired)
 
-### 2.2 Inventory System
+### 6.2 Inventory System
 
 - [ ] ⏳ Create `InventoryManager` class
 - [ ] ⏳ Grid-based inventory data structure
@@ -102,7 +336,7 @@
 - [ ] ⏳ Inventory sorting and filtering
 - [ ] ⏳ Quick-access hotbar (9 slots)
 
-### 2.3 Item System
+### 6.3 Item System
 
 #### Core Item Framework
 - [ ] ⏳ Create `Item` base class
@@ -131,7 +365,7 @@
 - [ ] ⏳ Scrolls (single-use spell casting)
 - [ ] ⏳ Potion effects and duration
 
-### 2.4 Daggerfall-Style HUD
+### 6.4 Daggerfall-Style HUD
 
 - [ ] ⏳ Design HUD layout mockup
 - [ ] ⏳ Implement compass at top center
@@ -145,7 +379,7 @@
 - [ ] ⏳ Current weapon/spell display
 - [ ] ⏳ Cursor/crosshair for interaction
 
-### 2.5 Menu Interfaces
+### 6.5 Menu Interfaces
 
 - [ ] ⏳ Main menu (continue, new game, load, settings, quit)
 - [ ] ⏳ Pause menu (resume, character, inventory, map, settings, quit)
@@ -160,9 +394,9 @@
 
 ---
 
-## Phase 3: Mining & Building (Minecraft-Inspired)
+## Phase 7: Mining ## Phase 19: Mining & Building Building (Minecraft-Inspired)
 
-### 3.1 Mining System
+### 7.1 Mining System
 
 - [ ] ⏳ Implement block breaking mechanic
 - [ ] ⏳ Block break animation and particles
@@ -173,7 +407,7 @@
 - [ ] ⏳ Drop items when breaking certain blocks (ore → ore items)
 - [ ] ⏳ Fortune/efficiency tool enchantments
 
-### 3.2 Building System
+### 7.2 Building System
 
 - [ ] ⏳ Implement block placement mechanic
 - [ ] ⏳ Block placement preview
@@ -183,7 +417,7 @@
 - [ ] ⏳ Multi-block structures (doors, beds, tables)
 - [ ] ⏳ Scaffolding or temporary blocks
 
-### 3.3 Block Types
+### 7.3 Block Types
 
 #### Natural Blocks
 - [ ] ⏳ Stone, Cobblestone, Smooth Stone
@@ -203,7 +437,7 @@
 - [ ] ⏳ Crafting tables, forges, enchanting tables
 - [ ] ⏳ Furniture blocks (decorative)
 
-### 3.4 Tools
+### 7.4 Tools
 
 - [ ] ⏳ Implement tool system
 - [ ] ⏳ Tool types: pickaxe, axe, shovel, hoe
@@ -214,9 +448,122 @@
 
 ---
 
-## Phase 4: Combat & Magic Systems
+## Phase 8: Farming System (Stardew Valley-Inspired)
 
-### 4.1 Melee Combat
+### 8.1 Crop System
+
+- [ ] ⏳ Implement tilling mechanic (hoe tool)
+- [ ] ⏳ Tilled soil block type
+- [ ] ⏳ Seed item types (spring, summer, autumn)
+- [ ] ⏳ Plant seeds on tilled soil
+- [ ] ⏳ Crop growth stages (visual progression)
+- [ ] ⏳ Crop growth timer system
+- [ ] ⏳ Season-appropriate planting requirements
+- [ ] ⏳ Crop death on season change
+- [ ] ⏳ Harvest mechanic (break mature crop)
+- [ ] ⏳ Crop yield and quality system
+- [ ] ⏳ Multi-harvest crops (tomatoes, berries, corn)
+- [ ] ⏳ Giant crops (3x3 rare spawns)
+
+### 8.2 Watering & Soil
+
+- [ ] ⏳ Watering can tool
+- [ ] ⏳ Soil moisture system (dry → wet)
+- [ ] ⏳ Daily moisture decay (crops need water)
+- [ ] ⏳ Rain auto-waters crops
+- [ ] ⏳ Fertilizer system (speed, quality)
+- [ ] ⏳ Soil quality levels
+- [ ] ⏳ Fertilizer crafting recipes
+
+### 8.3 Sprinklers & Automation
+
+- [ ] ⏳ Basic sprinkler (4 tiles, + pattern)
+- [ ] ⏳ Quality sprinkler (8 tiles, 3x3)
+- [ ] ⏳ Iridium sprinkler (24 tiles, 5x5)
+- [ ] ⏳ Automatic daily watering
+- [ ] ⏳ Sprinkler crafting recipes
+- [ ] ⏳ Scarecrow (prevents crow damage)
+
+### 8.4 Animals & Ranching
+
+- [ ] ⏳ Chicken coop structure (buildable)
+- [ ] ⏳ Barn structure (buildable)
+- [ ] ⏳ Animal spawning system
+- [ ] ⏳ Chickens (eggs daily)
+- [ ] ⏳ Cows (milk daily)
+- [ ] ⏳ Sheep (wool every 3 days)
+- [ ] ⏳ Pigs (truffles when outside)
+- [ ] ⏳ Animal feeding system (hay, grass)
+- [ ] ⏳ Animal happiness/friendship system
+- [ ] ⏳ Pet interaction (increases happiness)
+- [ ] ⏳ Product quality based on happiness
+- [ ] ⏳ Silo structure (hay storage)
+- [ ] ⏳ Hay cutting from grass
+
+### 8.5 Artisan Processing
+
+- [ ] ⏳ Keg (crops → wine, beer, juice)
+- [ ] ⏳ Preserves jar (crops → jams, pickles)
+- [ ] ⏳ Cheese press (milk → cheese)
+- [ ] ⏳ Mayonnaise machine (eggs → mayo)
+- [ ] ⏳ Loom (wool → cloth)
+- [ ] ⏳ Oil maker (sunflowers, corn → oil)
+- [ ] ⏳ Processing time system
+- [ ] ⏳ Quality preservation in processing
+- [ ] ⏳ Artisan goods value multipliers
+
+### 8.6 Greenhouse
+
+- [ ] ⏳ Greenhouse structure (buildable or quest reward)
+- [ ] ⏳ Year-round crop growth inside
+- [ ] ⏳ No seasonal death for greenhouse crops
+- [ ] ⏳ Slightly faster growth rate
+- [ ] ⏳ Limited interior space
+
+### 8.7 Farming Skills
+
+- [ ] ⏳ Farming skill XP system
+- [ ] ⏳ Gain XP from harvesting crops and animal products
+- [ ] ⏳ Farming level perks (0-100)
+  - [ ] ⏳ Level 10: Crops sell for 5% more
+  - [ ] ⏳ Level 20: Quality sprinkler recipe
+  - [ ] ⏳ Level 30: 10% faster growth
+  - [ ] ⏳ Level 40: Iridium sprinkler recipe
+  - [ ] ⏳ Level 50: Higher quality chance
+  - [ ] ⏳ Level 60: Crops sell for 10% more
+  - [ ] ⏳ Level 70: Animal products worth more
+  - [ ] ⏳ Level 80: Deluxe barn/coop recipes
+  - [ ] ⏳ Level 90: Greenhouse blueprint
+  - [ ] ⏳ Level 100: Chance for double harvest
+
+### 8.8 Farming Integration
+
+- [ ] ⏳ Seed merchants in villages/towns
+- [ ] ⏳ Sell crops to merchants
+- [ ] ⏳ Crop prices fluctuate by season
+- [ ] ⏳ Cooking recipes use crops
+- [ ] ⏳ Alchemy recipes use crops/flowers
+- [ ] ⏳ "Deliver crops" quests
+- [ ] ⏳ Festival crop competitions
+- [ ] ⏳ Multiplayer shared farm space
+- [ ] ⏳ Gifting crops to players/NPCs
+
+### 8.9 Advanced Farming
+
+- [ ] ⏳ Seed maker (crop → seeds)
+- [ ] ⏳ Crop mutations (rare hybrids)
+- [ ] ⏳ Ancient fruit (rare, year-round, high value)
+- [ ] ⏳ Sweet gem berry (most valuable)
+- [ ] ⏳ Community center crop bundles
+- [ ] ⏳ Seasonal festivals with farming events
+- [ ] ⏳ Farm animals can breed
+- [ ] ⏳ Animal variants (brown chicken, white cow, etc.)
+
+---
+
+## Phase 9: Combat & Magic Systems
+
+### 9.1 Melee Combat
 
 - [ ] ⏳ First-person melee attack system
 - [ ] ⏳ Directional attacks (slash, thrust, overhead) based on mouse movement
@@ -229,7 +576,7 @@
 - [ ] ⏳ Weapon skill affects damage and accuracy
 - [ ] ⏳ Dual-wielding support
 
-### 4.2 Blocking & Defense
+### 8.2 Blocking ### 16.2 Blocking & Defense Defense
 
 - [ ] ⏳ Shield blocking mechanic (hold right-click)
 - [ ] ⏳ Block effectiveness based on shield type and skill
@@ -238,7 +585,7 @@
 - [ ] ⏳ Block animations
 - [ ] ⏳ Shield bash ability
 
-### 4.3 Ranged Combat
+### 9.3 Ranged Combat
 
 - [ ] ⏳ Bow and arrow system
 - [ ] ⏳ Draw and release mechanic (hold to charge)
@@ -248,7 +595,7 @@
 - [ ] ⏳ Archery skill affects accuracy and damage
 - [ ] ⏳ Different arrow types (fire, poison, etc.)
 
-### 4.4 Magic System
+### 9.4 Magic System
 
 #### Spell Framework
 - [ ] ⏳ Create `Spell` base class
@@ -293,7 +640,7 @@
 - [ ] ⏳ Spell hotkeys
 - [ ] ⏳ Spell crafting system (advanced feature)
 
-### 4.5 Combat Effects
+### 9.5 Combat Effects
 
 - [ ] ⏳ Damage numbers display
 - [ ] ⏳ Blood/hit particle effects
@@ -306,9 +653,9 @@
 
 ---
 
-## Phase 5: Enemy System
+## Phase 10: Enemy System
 
-### 5.1 Enemy AI Framework
+### 10.1 Enemy AI Framework
 
 - [ ] ⏳ Create `Enemy` base class
 - [ ] ⏳ Enemy stats (health, damage, speed, armor)
@@ -319,7 +666,7 @@
 - [ ] ⏳ Group AI (enemies coordinate attacks)
 - [ ] ⏳ Enemy level scaling
 
-### 5.2 Enemy Types
+### 10.2 Enemy Types
 
 #### Tier 1 Enemies (Level 1-5)
 - [ ] ⏳ Rat (weak, fast)
@@ -353,7 +700,7 @@
 - [ ] ⏳ Demon Lord (melee boss)
 - [ ] ⏳ Vampire Lord (hybrid boss)
 
-### 5.3 Enemy Features
+### 10.3 Enemy Features
 
 - [ ] ⏳ Enemy animations (idle, walk, attack, death)
 - [ ] ⏳ Enemy sounds (growls, attacks, death)
@@ -365,9 +712,9 @@
 
 ---
 
-## Phase 6: Dungeon Generation System
+## Phase 11: Dungeon Generation System
 
-### 6.1 Dungeon Architecture
+### 11.1 Dungeon Architecture
 
 - [ ] ⏳ Create `DungeonGenerator` class
 - [ ] ⏳ Room-based generation algorithm
@@ -378,7 +725,7 @@
 - [ ] ⏳ Dead-end rooms with rewards
 - [ ] ⏳ Secret room generation
 
-### 6.2 Dungeon Features
+### 11.2 Dungeon Features
 
 - [ ] ⏳ Entrance/exit markers
 - [ ] ⏳ Treasure chests (locked and unlocked)
@@ -391,7 +738,7 @@
 - [ ] ⏳ Boss rooms (larger, special design)
 - [ ] ⏳ Lore objects (books, tablets)
 
-### 6.3 Dungeon Types
+### 11.3 Dungeon Types
 
 - [ ] ⏳ Crypts (undead theme, dark)
 - [ ] ⏳ Caves (natural formations, wildlife)
@@ -400,7 +747,7 @@
 - [ ] ⏳ Sewers (water, rats, bandits)
 - [ ] ⏳ Towers (vertical layout, multiple floors)
 
-### 6.4 Dungeon Difficulty
+### 11.4 Dungeon Difficulty
 
 - [ ] ⏳ Difficulty scaling based on depth
 - [ ] ⏳ Higher-tier enemies in deeper levels
@@ -410,9 +757,9 @@
 
 ---
 
-## Phase 7: Loot & Economy
+## Phase 12: Loot & Economy
 
-### 7.1 Loot System
+### 12.1 Loot System
 
 - [ ] ⏳ Create `LootTable` system
 - [ ] ⏳ Randomized loot generation
@@ -423,14 +770,14 @@
 - [ ] ⏳ Boss guaranteed rare loot
 - [ ] ⏳ Gold/currency drops
 
-### 7.2 Currency System
+### 12.2 Currency System
 
 - [ ] ⏳ Gold currency
 - [ ] ⏳ Currency display in UI
 - [ ] ⏳ Pick up gold from enemies/chests
 - [ ] ⏳ Store gold value on items
 
-### 7.3 Merchant System
+### 12.3 Merchant System
 
 - [ ] ⏳ Create `Merchant` NPC type
 - [ ] ⏳ Merchant inventory system
@@ -443,9 +790,9 @@
 
 ---
 
-## Phase 8: Crafting System
+## Phase 13: Crafting System
 
-### 8.1 Crafting Framework
+### 13.1 Crafting Framework
 
 - [ ] ⏳ Create `CraftingSystem` class
 - [ ] ⏳ Recipe data structure
@@ -455,7 +802,7 @@
 - [ ] ⏳ Success/failure system (skill-based)
 - [ ] ⏳ Recipe discovery system
 
-### 8.2 Crafting Stations
+### 13.2 Crafting Stations
 
 - [ ] ⏳ Crafting Table (general crafting)
 - [ ] ⏳ Forge (weapons, armor, ingots)
@@ -463,7 +810,7 @@
 - [ ] ⏳ Enchanting Table (enchantments)
 - [ ] ⏳ Tanning Rack (leather processing)
 
-### 8.3 Recipes
+### 13.3 Recipes
 
 #### Smithing Recipes
 - [ ] ⏳ Weapons (by material tier)
@@ -494,9 +841,9 @@
 
 ---
 
-## Phase 9: NPC & Dialogue System
+## Phase 14: NPC & Dialogue System
 
-### 9.1 NPC Framework
+### 14.1 NPC Framework
 
 - [ ] ⏳ Create `NPC` base class
 - [ ] ⏳ NPC pathfinding and movement
@@ -505,7 +852,7 @@
 - [ ] ⏳ NPC relationship/disposition system
 - [ ] ⏳ Named vs. generic NPCs
 
-### 9.2 NPC Types
+### 14.2 NPC Types
 
 - [ ] ⏳ Merchants
 - [ ] ⏳ Trainers (skill training)
@@ -514,7 +861,7 @@
 - [ ] ⏳ Innkeepers
 - [ ] ⏳ Commoners
 
-### 9.3 Dialogue System
+### 14.3 Dialogue System
 
 - [ ] ⏳ Dialogue UI (Daggerfall-style)
 - [ ] ⏳ Branching dialogue options
@@ -523,7 +870,7 @@
 - [ ] ⏳ Rumors and lore
 - [ ] ⏳ Persuasion mini-game (optional)
 
-### 9.4 Towns & Villages
+### 13.4 Towns ### 17.4 Towns & Villages Villages
 
 - [ ] ⏳ Procedural village generation
 - [ ] ⏳ Pre-built town structures
@@ -535,9 +882,9 @@
 
 ---
 
-## Phase 10: Quest System
+## Phase 15: Quest System
 
-### 10.1 Quest Framework
+### 15.1 Quest Framework
 
 - [ ] ⏳ Create `Quest` class
 - [ ] ⏳ Quest objective tracking
@@ -546,7 +893,7 @@
 - [ ] ⏳ Quest rewards (XP, gold, items)
 - [ ] ⏳ Quest stages and progression
 
-### 10.2 Quest Types
+### 15.2 Quest Types
 
 - [ ] ⏳ Kill quests (defeat X enemies)
 - [ ] ⏳ Fetch quests (retrieve item from dungeon)
@@ -555,14 +902,14 @@
 - [ ] ⏳ Exploration quests (discover location)
 - [ ] ⏳ Bounty quests (hunt specific enemy)
 
-### 10.3 Main Quest Line (Optional)
+### 15.3 Main Quest Line (Optional)
 
 - [ ] ⏳ Overarching storyline
 - [ ] ⏳ Unique quest rewards
 - [ ] ⏳ Story dungeons
 - [ ] ⏳ Climactic boss fights
 
-### 10.4 Guild Quests (Future)
+### 15.4 Guild Quests (Future)
 
 - [ ] ⏳ Fighters Guild questline
 - [ ] ⏳ Mages Guild questline
@@ -571,9 +918,9 @@
 
 ---
 
-## Phase 11: Saving & Persistence
+## Phase 16: Saving & Persistence
 
-### 11.1 Save System
+### 16.1 Save System
 
 - [ ] ⏳ Create save file format
 - [ ] ⏳ Save player character data
@@ -585,7 +932,7 @@
 - [ ] ⏳ Auto-save functionality
 - [ ] ⏳ Save on exit
 
-### 11.2 Load System
+### 16.2 Load System
 
 - [ ] ⏳ Load character data
 - [ ] ⏳ Load world state
@@ -595,9 +942,9 @@
 
 ---
 
-## Phase 12: Audio & Music
+## Phase 17: Audio & Music
 
-### 12.1 Sound Effects
+### 17.1 Sound Effects
 
 - [ ] ⏳ Footstep sounds (varied by surface)
 - [ ] ⏳ Weapon swing and impact sounds
@@ -610,7 +957,7 @@
 - [ ] ⏳ Door opening/closing
 - [ ] ⏳ Chest opening
 
-### 12.2 Music
+### 17.2 Music
 
 - [ ] ⏳ Main menu theme
 - [ ] ⏳ Surface exploration music
@@ -621,7 +968,7 @@
 - [ ] ⏳ Victory/level up fanfare
 - [ ] ⏳ Ambient tracks for different biomes
 
-### 12.3 Audio Systems
+### 17.3 Audio Systems
 
 - [ ] ⏳ 3D positional audio
 - [ ] ⏳ Volume controls (master, music, SFX, ambient)
@@ -630,9 +977,9 @@
 
 ---
 
-## Phase 13: Polish & Optimization
+## Phase 18: Polish & Optimization
 
-### 13.1 Performance Optimization
+### 18.1 Performance Optimization
 
 - [ ] ⏳ Profile and optimize chunk generation
 - [ ] ⏳ Optimize mesh building (greedy meshing)
@@ -645,7 +992,7 @@
 - [ ] ⏳ Optimize AI pathfinding
 - [ ] ⏳ Thread pool management
 
-### 13.2 Graphics Polish
+### 18.2 Graphics Polish
 
 - [ ] ⏳ Particle effects (magic, impacts, weather)
 - [ ] ⏳ Weather system (rain, snow, fog)
@@ -655,7 +1002,7 @@
 - [ ] ⏳ Animation polish
 - [ ] ⏳ Visual feedback improvements
 
-### 13.3 UI/UX Polish
+### 18.3 UI/UX Polish
 
 - [ ] ⏳ Consistent UI aesthetic
 - [ ] ⏳ Tooltips everywhere
@@ -665,7 +1012,7 @@
 - [ ] ⏳ Loading screens with tips
 - [ ] ⏳ Smooth transitions between menus
 
-### 13.4 Bug Fixes
+### 18.4 Bug Fixes
 
 - [ ] 🐛 Fix current face rendering bug
 - [ ] ⏳ Collision detection edge cases
@@ -677,9 +1024,9 @@
 
 ---
 
-## Phase 14: Content Expansion
+## Phase 19: Content Expansion
 
-### 14.1 More Items
+### 19.1 More Items
 
 - [ ] ⏳ 50+ unique weapons
 - [ ] ⏳ 50+ armor pieces
@@ -688,19 +1035,19 @@
 - [ ] ⏳ Unique/legendary items
 - [ ] ⏳ Artifact items (special powers)
 
-### 14.2 More Enemies
+### 19.2 More Enemies
 
 - [ ] ⏳ 30+ enemy types total
 - [ ] ⏳ 10+ boss variations
 - [ ] ⏳ Rare enemy spawns
 
-### 14.3 More Dungeons
+### 19.3 More Dungeons
 
 - [ ] ⏳ Unique hand-crafted dungeons
 - [ ] ⏳ Mega-dungeons (large, multi-level)
 - [ ] ⏳ Themed dungeon sets
 
-### 14.4 More Biomes
+### 19.4 More Biomes
 
 - [ ] ⏳ Jungle biome
 - [ ] ⏳ Swamp biome
@@ -711,134 +1058,190 @@
 
 ---
 
-## Phase 15: Advanced Features (Post-Launch)
+## Phase 20: Advanced Features (Post-Launch)
 
-### 15.1 Multiplayer
-
-- [ ] ⏳ Co-op dungeon crawling (2-4 players)
-- [ ] ⏳ Shared world building
-- [ ] ⏳ PvP arenas (optional)
-- [ ] ⏳ Server hosting
-
-### 15.2 Modding Support
+### 20.1 Modding Support
 
 - [ ] ⏳ Mod loading system
+- [ ] ⏳ Server-side mod support
 - [ ] ⏳ Custom item support
 - [ ] ⏳ Custom enemy support
 - [ ] ⏳ Custom spell support
 - [ ] ⏳ Custom dungeon support
-- [ ] ⏳ Modding documentation and tools
+- [ ] ⏳ Custom biome support
+- [ ] ⏳ Modding API documentation
+- [ ] ⏳ Modding tools
 
-### 15.3 Advanced Magic
+### 20.2 Advanced Magic
 
 - [ ] ⏳ Spell crafting system
 - [ ] ⏳ Combine spell effects
 - [ ] ⏳ Custom spell naming
-- [ ] ⏳ Spell research
+- [ ] ⏳ Spell research mechanic
+- [ ] ⏳ Spell experimentation (risk/reward)
 
-### 15.4 Player Housing
+### 20.3 Player Housing
 
-- [ ] ⏳ Purchasable houses
-- [ ] ⏳ House customization
-- [ ] ⏳ Storage chests
-- [ ] ⏳ Decoration placement
-- [ ] ⏳ Trophy displays
+- [ ] ⏳ Purchasable houses in towns
+- [ ] ⏳ House customization (furniture, decorations)
+- [ ] ⏳ Expanded storage chests
+- [ ] ⏳ Decoration placement system
+- [ ] ⏳ Trophy displays (boss kills, achievements)
+- [ ] ⏳ House upgrades
 
-### 15.5 Advanced NPCs
+### 20.4 Advanced NPCs
 
 - [ ] ⏳ Companion system (follower NPCs)
-- [ ] ⏳ Reputation system
-- [ ] ⏳ NPC relationships
+- [ ] ⏳ Faction reputation system
+- [ ] ⏳ NPC relationships and friendships
 - [ ] ⏳ Marriage system (optional)
+- [ ] ⏳ NPC complex daily schedules
+- [ ] ⏳ Dynamic NPC reactions to world events
+
+### 20.5 Additional Gameplay Features
+
+- [ ] ⏳ Farming system (crops influenced by seasons)
+- [ ] ⏳ Animal husbandry (breeding, raising livestock)
+- [ ] ⏳ Fishing system
+- [ ] ⏳ Cooking system
+- [ ] ⏳ Ocean/underwater content (boats, diving, sea creatures)
+- [ ] ⏳ Boss raid instances (multiplayer)
+- [ ] ⏳ PvP arenas (server configurable)
+- [ ] ⏳ World events (festivals, invasions, meteor showers)
+- [ ] ⏳ Proximity voice chat
 
 ---
 
 ## Current Priority Tasks (Next Sprint)
 
-1. **Fix face rendering issues** - High priority bug
-2. **Implement character stats system** - Foundation for RPG mechanics
-3. **Design and implement Daggerfall-style HUD** - Core UI element
-4. **Create inventory system** - Essential for item management
-5. **Implement basic mining and block placement** - Core gameplay loop
-6. **Create first-person melee combat** - Combat foundation
-7. **Build basic enemy AI** - At least one enemy type
-8. **Simple loot drops** - Basic reward system
+### Immediate Priorities (Phase 1 & 2)
+1. **Fix face rendering issues** - High priority bug (Phase 1)
+2. **Implement texture atlas system** - Foundation for swappable textures (Phase 2)
+3. **Create default texture atlas** - Vanilla textures (Phase 2)
+4. **Resource pack loader** - JSON-based UV mapping (Phase 2)
+
+### Early Gameplay (Phase 3 & 6)
+5. **Day/night cycle** - Time progression system (Phase 3)
+6. **Basic weather** - Rain and clear weather (Phase 3)
+7. **Design and implement Daggerfall-style HUD** - With time/season/weather display (Phase 6)
+8. **Character stats system** - Foundation for RPG mechanics (Phase 6)
+
+### Core Loop (Phase 7)
+9. **Implement basic mining and block placement** - Core gameplay loop
+10. **Create inventory system** - Essential for item management
+11. **Simple crafting** - Basic recipes
+
+### Multiplayer Foundation (Phase 4)
+12. **Basic networking** - Client-server architecture
+13. **Player synchronization** - Position and block changes
+14. **Text chat** - Communication system
 
 ---
 
 ## Milestone Goals
 
-### Milestone 1: Playable Alpha (Core Loop)
+### Milestone 1: Living World Foundation
 - ✅ Voxel terrain working
-- ⏳ Character with stats and inventory
+- ⏳ Texture atlas system (swappable textures)
+- ⏳ Day/night cycle functional
+- ⏳ Weather system (rain, snow, clear)
+- ⏳ Seasonal system working
+- ⏳ Basic biome generation (plains, forest, desert, mountain)
+- ⏳ Time/season/weather display on HUD
+
+**Target:** Establish living, breathing world with dynamic systems
+
+### Milestone 2: Multiplayer Core
+- ⏳ Client-server networking functional
+- ⏳ Player synchronization working
+- ⏳ Block place/break synced across players
+- ⏳ Text chat system
+- ⏳ Server browser
+- ⏳ 2-4 players stable
+- ⏳ Time/weather synced across clients
+
+**Target:** Stable multiplayer foundation for co-op play
+
+### Milestone 3: Overworld Exploration
+- ⏳ Multiple biomes generating
+- ⏳ Village generation working
+- ⏳ Dungeon entrances scattered in world
+- ⏳ Natural structures (caves, ravines, ruins)
+- ⏳ World persistence (save/load)
+- ⏳ Fast travel system
+
+**Target:** Rich explorable overworld with points of interest
+
+### Milestone 4: RPG Systems & Building
+- ⏳ Character stats and skills
+- ⏳ Inventory and equipment
 - ⏳ Mining and building functional
-- ⏳ Basic combat (melee)
-- ⏳ One enemy type
-- ⏳ Basic loot system
-- ⏳ Daggerfall-style HUD
+- ⏳ Crafting system (basic recipes)
+- ⏳ Daggerfall-style HUD with all displays
+- ⏳ Menu interfaces (character, inventory, crafting)
 
-**Target:** Achieve basic gameplay loop
+**Target:** Core RPG mechanics and building gameplay
 
-### Milestone 2: Combat & Magic
-- ⏳ Full combat system (melee, ranged, blocking)
-- ⏳ Magic system with 10+ spells
-- ⏳ 5+ enemy types
-- ⏳ Enemy AI improvements
-- ⏳ Status effects
-
-**Target:** Engaging combat experience
-
-### Milestone 3: Dungeons & Exploration
-- ⏳ Dungeon generation working
+### Milestone 5: Combat & Dungeons
+- ⏳ Melee, ranged, and magic combat
+- ⏳ 10+ enemy types with AI
+- ⏳ Dungeon generation (instanced)
 - ⏳ 3+ dungeon types
-- ⏳ Traps and hazards
 - ⏳ Boss enemies
-- ⏳ Treasure and loot tables
+- ⏳ Loot system
+- ⏳ Multiplayer dungeon raiding
 
-**Target:** Dungeon crawling core loop
+**Target:** Engaging combat and dungeon crawling
 
-### Milestone 4: RPG Depth
-- ⏳ Full skill system
-- ⏳ Leveling and progression
-- ⏳ Crafting system
-- ⏳ NPCs and dialogue
-- ⏳ Merchants and economy
-- ⏳ Quest system basics
+### Milestone 6: NPCs & Content
+- ⏳ NPC system with dialogue
+- ⏳ Merchants and trading
+- ⏳ Quest system
+- ⏳ Towns with NPCs
+- ⏳ Guild halls
+- ⏳ 30+ enemies, 50+ items, 20+ spells
 
-**Target:** Complete RPG experience
+**Target:** Populated world with RPG depth
 
-### Milestone 5: Polish & Release
-- ⏳ Performance optimized
+### Milestone 7: Polish & Launch
+- ⏳ Performance optimized (60 FPS target)
 - ⏳ Audio and music complete
 - ⏳ UI polished
-- ⏳ Save system robust
-- ⏳ Tutorial and help
-- ⏳ Content expanded (30+ enemies, 50+ items, etc.)
+- ⏳ Tutorial system
+- ⏳ Server administration tools
+- ⏳ Resource pack support complete
 
-**Target:** Full 1.0 release
+**Target:** Polished 1.0 release ready for players
 
 ---
 
 ## Notes
 
-- **Prioritize Core Loop:** Focus on getting mining → building → combat → loot cycle working first
-- **Iterate on Feel:** Combat and mining should feel satisfying before moving to complex systems
+- **Multiplayer First:** Design all systems with multiplayer in mind from the start
+- **Living World:** Prioritize dynamic systems (seasons, weather, time) for immersive experience
+- **Texture Atlas Early:** Get resource pack system working early for modding community
+- **Iterate on Feel:** Combat, mining, and building should feel satisfying before moving to complex systems
 - **Daggerfall Aesthetic:** Keep the UI design true to Daggerfall's look and feel
-- **Performance First:** Don't add features at the cost of performance
-- **Test Frequently:** Playtest each system thoroughly before moving on
+- **Performance First:** Don't add features at the cost of performance, especially for multiplayer
+- **Test Frequently:** Playtest each system thoroughly, both solo and multiplayer
 - **Community Feedback:** Once alpha is playable, gather feedback to guide priorities
+- **Server Stability:** Network code must be robust and cheat-resistant
 
 ---
 
 ## Resources & References
 
-- **Daggerfall Unity:** For UI/UX inspiration
-- **Minecraft:** For voxel mechanics and feel
-- **Godot Voxel Tools:** Community resources
-- **Game Design Document:** See `game_design_document.md` for detailed design
+- **Daggerfall Unity:** For UI/UX inspiration and RPG mechanics
+- **Minecraft Beta 1.7:** For texture atlas system reference
+- **Minecraft:** For voxel mechanics, world generation, and feel
+- **Godot 4.x Networking:** Built-in multiplayer support
+- **Godot Voxel Tools:** Community resources for voxel rendering
+- **Game Design Document:** See `project_management/game_design_document.md` for detailed design
+- **ENet/WebRTC:** Potential networking libraries for multiplayer
 
 ---
 
 **Last Updated:** 2025-11-07
-**Current Phase:** Phase 2 - Daggerfall-Style RPG Systems
-**Next Review:** After Milestone 1 completion
+**Project Scope:** Multiplayer voxel RPG (Minecraft + Daggerfall + Dynamic World)
+**Current Phase:** Phase 1 Complete → Phase 2 (Texture Atlas) & Phase 3 (Dynamic Systems) Next
+**Next Review:** After Milestone 1 completion (Living World Foundation)
