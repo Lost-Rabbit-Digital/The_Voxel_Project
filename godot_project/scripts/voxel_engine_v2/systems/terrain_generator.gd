@@ -26,11 +26,15 @@ var height_cache: Dictionary = {}
 const MAX_CACHE_SIZE: int = 2000
 
 func _init(seed_value: int = 0) -> void:
+	print("[TerrainGenerator] Initializing with seed: %d" % seed_value)
 	if seed_value == 0:
 		seed_value = randi()
+		print("[TerrainGenerator] Generated random seed: %d" % seed_value)
 
 	world_seed = seed_value
+	print("[TerrainGenerator] Setting up noise generators...")
 	_setup_noise_generators()
+	print("[TerrainGenerator] Noise generators ready")
 
 ## Initialize all noise generators with seed
 func _setup_noise_generators() -> void:
@@ -70,6 +74,7 @@ func _setup_noise_generators() -> void:
 
 ## Generate a complete chunk of voxel data
 func generate_chunk(chunk_pos: Vector3i) -> VoxelData:
+	print("[TerrainGen] Generating chunk %s..." % chunk_pos)
 	var voxel_data := VoxelData.new(chunk_pos)
 	var chunk_start := chunk_pos * VoxelData.CHUNK_SIZE
 

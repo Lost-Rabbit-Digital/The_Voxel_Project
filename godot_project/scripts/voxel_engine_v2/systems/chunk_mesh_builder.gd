@@ -24,8 +24,10 @@ var default_material: StandardMaterial3D
 var chunk_manager: ChunkManager
 
 func _init(manager: ChunkManager = null) -> void:
+	print("[MeshBuilder] Initializing...")
 	chunk_manager = manager
 	_create_default_material()
+	print("[MeshBuilder] Ready")
 
 ## Create a simple default material for testing
 func _create_default_material() -> void:
@@ -37,15 +39,22 @@ func _create_default_material() -> void:
 ## Build mesh for a chunk
 func build_mesh(chunk: Chunk) -> MeshInstance3D:
 	if not chunk or not chunk.voxel_data:
+		print("[MeshBuilder] ERROR: Invalid chunk or voxel data")
 		return null
 
 	# Skip empty chunks
 	if chunk.is_empty():
+		print("[MeshBuilder] Chunk %s is empty, skipping mesh" % chunk.position)
 		return null
+
+	print("[MeshBuilder] Building mesh for chunk %s..." % chunk.position)
 
 	# Create surface tool for mesh building
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+
+	var solid_voxels := 0
+	var faces_added := 0
 
 	# Iterate through all voxels in the chunk
 	for x in range(VoxelData.CHUNK_SIZE):
@@ -58,15 +67,25 @@ func build_mesh(chunk: Chunk) -> MeshInstance3D:
 				if voxel_type == VoxelTypes.Type.AIR:
 					continue
 
+				solid_voxels += 1
+
 				# Skip transparent voxels for now (Phase 2 feature)
 				if VoxelTypes.is_transparent(voxel_type):
 					continue
 
 				# Add visible faces
+				var faces_before := st.get_num_draw_vertices() / 6
 				_add_voxel_faces(st, chunk, local_pos, voxel_type)
+				var new_faces := (st.get_num_draw_vertices() / 6) - faces_before
+				faces_added += new_faces
+
+	print("[MeshBuilder]   Processed %d solid voxels" % solid_voxels)
+	print("[MeshBuilder]   Added %d faces" % faces_added)
+	print("[MeshBuilder]   Total vertices: %d" % st.get_num_draw_vertices())
 
 	# Check if we have any geometry
 	if st.get_num_draw_vertices() == 0:
+		print("[MeshBuilder] No vertices to mesh, returning null")
 		return null
 
 	# Generate normals and create mesh
@@ -81,6 +100,7 @@ func build_mesh(chunk: Chunk) -> MeshInstance3D:
 	# Enable shadow casting
 	mesh_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 
+	print("[MeshBuilder] ✓ Mesh created successfully")
 	return mesh_instance
 
 ## Add visible faces for a single voxel

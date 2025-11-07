@@ -37,16 +37,39 @@ var debug_label: Label
 var stats_timer: float = 0.0
 
 func _ready() -> void:
+	print("========================================")
+	print("[VoxelWorld] _ready() called")
+	print("[VoxelWorld] Configuration:")
+	print("  - world_seed: %d" % world_seed)
+	print("  - render_distance: %d" % render_distance)
+	print("  - vertical_render_distance: %d" % vertical_render_distance)
+	print("  - enable_auto_generation: %s" % enable_auto_generation)
+	print("  - enable_chunk_pooling: %s" % enable_chunk_pooling)
+	print("  - chunk_pool_size: %d" % chunk_pool_size)
+	print("========================================")
+
 	_initialize_systems()
 	_setup_debug_ui()
 
 	# Find player if path is set
 	if not player_node_path.is_empty():
+		print("[VoxelWorld] Looking for player at path: %s" % player_node_path)
 		player_node = get_node_or_null(player_node_path)
+		if player_node:
+			print("[VoxelWorld] Found player node: %s" % player_node.name)
+			tracked_position = player_node.global_position
+			print("[VoxelWorld] Initial player position: %s" % tracked_position)
+		else:
+			print("[VoxelWorld] WARNING: Player node not found at path!")
+	else:
+		print("[VoxelWorld] No player node path set, using default position")
 
 	# Start with initial chunk load
 	if enable_auto_generation:
+		print("[VoxelWorld] Starting initial chunk generation...")
 		_update_chunks()
+	else:
+		print("[VoxelWorld] Auto-generation disabled")
 
 func _process(delta: float) -> void:
 	# Update tracked position
@@ -63,29 +86,43 @@ func _process(delta: float) -> void:
 
 ## Initialize all voxel systems
 func _initialize_systems() -> void:
+	print("[VoxelWorld] Initializing voxel systems...")
+
 	# Create terrain generator with seed
 	if world_seed == 0:
 		world_seed = randi()
-	terrain_generator = TerrainGenerator.new(world_seed)
+		print("[VoxelWorld] Generated random seed: %d" % world_seed)
+	else:
+		print("[VoxelWorld] Using configured seed: %d" % world_seed)
 
-	print("VoxelWorld: Initialized with seed %d" % world_seed)
+	print("[VoxelWorld] Creating TerrainGenerator...")
+	terrain_generator = TerrainGenerator.new(world_seed)
+	print("[VoxelWorld] TerrainGenerator created successfully")
 
 	# Create chunk manager
+	print("[VoxelWorld] Creating ChunkManager...")
 	chunk_manager = ChunkManager.new()
 	chunk_manager.render_distance = render_distance
 	chunk_manager.vertical_render_distance = vertical_render_distance
 	chunk_manager.enable_pooling = enable_chunk_pooling
 	chunk_manager.pool_size = chunk_pool_size
+	print("[VoxelWorld] Adding ChunkManager as child...")
 	add_child(chunk_manager)
+	print("[VoxelWorld] ChunkManager added to scene tree")
 
 	# Create mesh builder
+	print("[VoxelWorld] Creating ChunkMeshBuilder...")
 	mesh_builder = ChunkMeshBuilder.new(chunk_manager)
+	print("[VoxelWorld] ChunkMeshBuilder created successfully")
 
 	# Connect systems
+	print("[VoxelWorld] Connecting systems...")
 	chunk_manager.terrain_generator = terrain_generator
 	chunk_manager.mesh_builder = mesh_builder
+	print("[VoxelWorld] Systems connected")
 
-	print("VoxelWorld: Systems initialized")
+	print("[VoxelWorld] ✓ All systems initialized successfully!")
+	print("========================================")
 
 ## Setup debug UI
 func _setup_debug_ui() -> void:

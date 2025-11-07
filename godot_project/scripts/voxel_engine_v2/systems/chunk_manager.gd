@@ -36,40 +36,73 @@ var stats_chunks_generated: int = 0
 var stats_chunks_meshed: int = 0
 
 func _ready() -> void:
+	print("[ChunkManager] _ready() called")
+	print("[ChunkManager] Configuration:")
+	print("  - render_distance: %d" % render_distance)
+	print("  - vertical_render_distance: %d" % vertical_render_distance)
+	print("  - enable_pooling: %s" % enable_pooling)
+	print("  - pool_size: %d" % pool_size)
+
 	# Initialize VoxelTypes registry
+	print("[ChunkManager] Initializing VoxelTypes registry...")
 	VoxelTypes.initialize()
+	print("[ChunkManager] VoxelTypes initialized with %d block types" % VoxelTypes.Type.size())
 
 	# Pre-populate chunk pool
 	if enable_pooling:
+		print("[ChunkManager] Pre-populating chunk pool with %d chunks..." % pool_size)
 		for i in range(pool_size):
 			chunk_pool.append(Chunk.new())
 		stats_pooled_chunks = chunk_pool.size()
+		print("[ChunkManager] Chunk pool ready: %d chunks" % stats_pooled_chunks)
+	else:
+		print("[ChunkManager] Chunk pooling disabled")
+
+	print("[ChunkManager] Ready!")
 
 ## Update chunks based on player position
 ## Only updates if player has moved significantly
 func update_chunks(player_position: Vector3) -> void:
 	# Check if we need to update
-	if last_update_position.distance_to(player_position) < UPDATE_THRESHOLD:
+	var distance := last_update_position.distance_to(player_position)
+	if distance < UPDATE_THRESHOLD:
 		return
 
+	print("[ChunkManager] Player moved %.1f units, updating chunks..." % distance)
 	last_update_position = player_position
 
 	# Get player's chunk position
 	var player_chunk_pos := world_to_chunk_position(player_position)
+	print("[ChunkManager] Player chunk position: %s" % player_chunk_pos)
 
 	# Determine which chunks should be loaded
 	var needed_chunks: Dictionary = {}
 	_calculate_needed_chunks(player_chunk_pos, needed_chunks)
+	print("[ChunkManager] Calculated %d chunks needed" % needed_chunks.size())
 
 	# Remove chunks that are too far
+	var chunks_before := active_chunks.size()
 	_unload_distant_chunks(needed_chunks)
+	var chunks_unloaded := chunks_before - active_chunks.size()
+	if chunks_unloaded > 0:
+		print("[ChunkManager] Unloaded %d chunks" % chunks_unloaded)
 
 	# Load new chunks
+	chunks_before = active_chunks.size()
 	_load_new_chunks(needed_chunks)
+	var chunks_loaded := active_chunks.size() - chunks_before
+	if chunks_loaded > 0:
+		print("[ChunkManager] Loaded %d new chunks" % chunks_loaded)
 
 	# Update stats
 	stats_active_chunks = active_chunks.size()
 	stats_pooled_chunks = chunk_pool.size()
+	print("[ChunkManager] Active: %d, Pooled: %d, Total generated: %d, Total meshed: %d" % [
+		stats_active_chunks,
+		stats_pooled_chunks,
+		stats_chunks_generated,
+		stats_chunks_meshed
+	])
 
 ## Calculate which chunks should be loaded based on render distance
 func _calculate_needed_chunks(center_pos: Vector3i, result: Dictionary) -> void:
@@ -108,43 +141,60 @@ func _load_new_chunks(needed_chunks: Dictionary) -> void:
 func load_chunk(chunk_pos: Vector3i) -> Chunk:
 	# Check if already loaded
 	if chunk_pos in active_chunks:
+		print("[ChunkManager] Chunk %s already loaded, skipping" % chunk_pos)
 		return active_chunks[chunk_pos]
+
+	print("[ChunkManager] Loading chunk at %s..." % chunk_pos)
 
 	# Get chunk from pool or create new
 	var chunk := _get_chunk_from_pool()
+	print("[ChunkManager]   Got chunk from pool (pooled: %d)" % chunk_pool.size())
 	chunk.initialize(chunk_pos)
 	chunk.state = Chunk.State.GENERATING
 
 	# Generate terrain data
 	if terrain_generator:
+		print("[ChunkManager]   Generating terrain...")
 		chunk.voxel_data = terrain_generator.generate_chunk(chunk_pos)
 		stats_chunks_generated += 1
+		var solid_count := chunk.voxel_data.count_solid_voxels()
+		print("[ChunkManager]   Generated %d solid voxels" % solid_count)
 	else:
-		# Fallback: fill with test pattern
+		print("[ChunkManager]   WARNING: No terrain generator, using test pattern")
 		_generate_test_chunk(chunk)
 
 	# Skip empty chunks
 	if chunk.is_empty():
+		print("[ChunkManager]   Chunk is empty, returning to pool")
 		_return_chunk_to_pool(chunk)
 		return null
 
 	# Generate mesh
 	chunk.state = Chunk.State.MESHING
 	if mesh_builder:
+		print("[ChunkManager]   Building mesh...")
 		var mesh_instance: MeshInstance3D = mesh_builder.build_mesh(chunk)
 		if mesh_instance:
 			chunk.mesh_instance = mesh_instance
 			mesh_instance.position = chunk.get_world_position()
 			add_child(mesh_instance)
 			stats_chunks_meshed += 1
+			var vertex_count := mesh_instance.mesh.get_surface_count() if mesh_instance.mesh else 0
+			print("[ChunkManager]   Mesh built with %d surfaces" % vertex_count)
+		else:
+			print("[ChunkManager]   WARNING: Mesh builder returned null")
+	else:
+		print("[ChunkManager]   WARNING: No mesh builder available")
 
 	# Update neighbor references
+	print("[ChunkManager]   Updating neighbor references...")
 	_update_chunk_neighbors(chunk_pos, chunk)
 
 	# Activate chunk
 	chunk.state = Chunk.State.ACTIVE
 	active_chunks[chunk_pos] = chunk
 
+	print("[ChunkManager] ✓ Chunk %s loaded successfully" % chunk_pos)
 	return chunk
 
 ## Unload a chunk at the given position
