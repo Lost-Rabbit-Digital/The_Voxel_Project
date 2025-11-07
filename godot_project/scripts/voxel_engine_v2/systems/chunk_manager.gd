@@ -131,7 +131,7 @@ func load_chunk(chunk_pos: Vector3i) -> Chunk:
 	# Generate mesh
 	chunk.state = Chunk.State.MESHING
 	if mesh_builder:
-		var mesh_instance := mesh_builder.build_mesh(chunk)
+		var mesh_instance: MeshInstance3D = mesh_builder.build_mesh(chunk)
 		if mesh_instance:
 			chunk.mesh_instance = mesh_instance
 			mesh_instance.position = chunk.get_world_position()
@@ -196,7 +196,7 @@ func _update_chunk_neighbors(chunk_pos: Vector3i, chunk: Chunk) -> void:
 
 	# Set this chunk's neighbors
 	for direction in neighbor_offsets.keys():
-		var neighbor_pos := chunk_pos + neighbor_offsets[direction]
+		var neighbor_pos: Vector3i = chunk_pos + neighbor_offsets[direction]
 		if neighbor_pos in active_chunks:
 			chunk.set_neighbor(direction, active_chunks[neighbor_pos])
 
@@ -211,7 +211,7 @@ func _update_chunk_neighbors(chunk_pos: Vector3i, chunk: Chunk) -> void:
 	}
 
 	for direction in neighbor_offsets.keys():
-		var neighbor_pos := chunk_pos + neighbor_offsets[direction]
+		var neighbor_pos: Vector3i = chunk_pos + neighbor_offsets[direction]
 		if neighbor_pos in active_chunks:
 			var neighbor: Chunk = active_chunks[neighbor_pos]
 			neighbor.set_neighbor(opposite[direction], chunk)
@@ -246,7 +246,7 @@ func _clear_chunk_neighbors(chunk_pos: Vector3i) -> void:
 	}
 
 	for direction in neighbor_offsets.keys():
-		var neighbor_pos := chunk_pos + neighbor_offsets[direction]
+		var neighbor_pos: Vector3i = chunk_pos + neighbor_offsets[direction]
 		if neighbor_pos in active_chunks:
 			var neighbor: Chunk = active_chunks[neighbor_pos]
 			neighbor.set_neighbor(opposite[direction], null)
