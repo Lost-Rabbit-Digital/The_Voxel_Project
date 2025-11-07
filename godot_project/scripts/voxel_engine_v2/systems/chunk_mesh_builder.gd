@@ -74,9 +74,9 @@ func build_mesh(chunk: Chunk) -> MeshInstance3D:
 					continue
 
 				# Add visible faces
-				var faces_before := st.get_num_draw_vertices() / 6
+				var faces_before: int = st.get_num_draw_vertices() / 6
 				_add_voxel_faces(st, chunk, local_pos, voxel_type)
-				var new_faces := (st.get_num_draw_vertices() / 6) - faces_before
+				var new_faces: int = (st.get_num_draw_vertices() / 6) - faces_before
 				faces_added += new_faces
 
 	print("[MeshBuilder]   Processed %d solid voxels" % solid_voxels)
