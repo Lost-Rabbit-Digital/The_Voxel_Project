@@ -85,8 +85,7 @@ func build_mesh(chunk: Chunk) -> MeshInstance3D:
 		print("[MeshBuilder] No vertices to mesh, returning null")
 		return null
 
-	# Generate normals and create mesh
-	st.generate_normals()
+	# Index the mesh for optimization (manual normals already set, no auto-generation needed)
 	st.index()
 
 	# Create mesh instance
@@ -195,83 +194,88 @@ func _get_voxel_color(voxel_type: int) -> Color:
 			return Color(1.0, 0.0, 1.0)  # Magenta for unknown types
 
 ## Add a quad (two triangles) with color
+## Vertices should be in counter-clockwise order when viewed from outside
 func _add_quad(st: SurfaceTool, vertices: PackedVector3Array, normal: Vector3, color: Color) -> void:
-	# First triangle (0, 1, 2)
+	# First triangle (0, 1, 2) - counter-clockwise
 	st.set_color(color)
 	st.set_normal(normal)
 	st.add_vertex(vertices[0])
+	st.set_normal(normal)
 	st.add_vertex(vertices[1])
+	st.set_normal(normal)
 	st.add_vertex(vertices[2])
 
-	# Second triangle (0, 2, 3)
+	# Second triangle (0, 2, 3) - counter-clockwise
 	st.set_color(color)
 	st.set_normal(normal)
 	st.add_vertex(vertices[0])
+	st.set_normal(normal)
 	st.add_vertex(vertices[2])
+	st.set_normal(normal)
 	st.add_vertex(vertices[3])
 
-## Top face (+Y)
+## Top face (+Y) - looking down from above, vertices are counter-clockwise
 func _add_top_face(st: SurfaceTool, pos: Vector3, voxel_type: int) -> void:
 	var vertices := PackedVector3Array([
-		pos + Vector3(0, VOXEL_SIZE, 0),
-		pos + Vector3(VOXEL_SIZE, VOXEL_SIZE, 0),
-		pos + Vector3(VOXEL_SIZE, VOXEL_SIZE, VOXEL_SIZE),
-		pos + Vector3(0, VOXEL_SIZE, VOXEL_SIZE)
+		pos + Vector3(0, VOXEL_SIZE, 0),              # back-left
+		pos + Vector3(VOXEL_SIZE, VOXEL_SIZE, 0),      # back-right
+		pos + Vector3(VOXEL_SIZE, VOXEL_SIZE, VOXEL_SIZE), # front-right
+		pos + Vector3(0, VOXEL_SIZE, VOXEL_SIZE)       # front-left
 	])
 	var color := _get_voxel_color(voxel_type)
-	_add_quad(st, vertices, Vector3.UP, color * 1.0)  # Full brightness
+	_add_quad(st, vertices, Vector3.UP, color * 1.0)  # Brightest (facing sky)
 
-## Bottom face (-Y)
+## Bottom face (-Y) - looking up from below, vertices are counter-clockwise
 func _add_bottom_face(st: SurfaceTool, pos: Vector3, voxel_type: int) -> void:
 	var vertices := PackedVector3Array([
-		pos + Vector3(0, 0, 0),
-		pos + Vector3(0, 0, VOXEL_SIZE),
-		pos + Vector3(VOXEL_SIZE, 0, VOXEL_SIZE),
-		pos + Vector3(VOXEL_SIZE, 0, 0)
+		pos + Vector3(0, 0, 0),              # back-left
+		pos + Vector3(0, 0, VOXEL_SIZE),      # front-left
+		pos + Vector3(VOXEL_SIZE, 0, VOXEL_SIZE), # front-right
+		pos + Vector3(VOXEL_SIZE, 0, 0)       # back-right
 	])
 	var color := _get_voxel_color(voxel_type)
-	_add_quad(st, vertices, Vector3.DOWN, color * 0.5)  # Darker
+	_add_quad(st, vertices, Vector3.DOWN, color * 0.6)  # Darker (shadow)
 
-## North face (+Z)
+## North face (+Z) - looking from front, vertices are counter-clockwise
 func _add_north_face(st: SurfaceTool, pos: Vector3, voxel_type: int) -> void:
 	var vertices := PackedVector3Array([
-		pos + Vector3(0, 0, VOXEL_SIZE),
-		pos + Vector3(0, VOXEL_SIZE, VOXEL_SIZE),
-		pos + Vector3(VOXEL_SIZE, VOXEL_SIZE, VOXEL_SIZE),
-		pos + Vector3(VOXEL_SIZE, 0, VOXEL_SIZE)
+		pos + Vector3(0, 0, VOXEL_SIZE),              # bottom-left
+		pos + Vector3(0, VOXEL_SIZE, VOXEL_SIZE),      # top-left
+		pos + Vector3(VOXEL_SIZE, VOXEL_SIZE, VOXEL_SIZE), # top-right
+		pos + Vector3(VOXEL_SIZE, 0, VOXEL_SIZE)       # bottom-right
 	])
 	var color := _get_voxel_color(voxel_type)
-	_add_quad(st, vertices, Vector3.FORWARD, color * 0.8)
+	_add_quad(st, vertices, Vector3.FORWARD, color * 0.85)  # Slightly shaded
 
-## South face (-Z)
+## South face (-Z) - looking from back, vertices are counter-clockwise
 func _add_south_face(st: SurfaceTool, pos: Vector3, voxel_type: int) -> void:
 	var vertices := PackedVector3Array([
-		pos + Vector3(VOXEL_SIZE, 0, 0),
-		pos + Vector3(VOXEL_SIZE, VOXEL_SIZE, 0),
-		pos + Vector3(0, VOXEL_SIZE, 0),
-		pos + Vector3(0, 0, 0)
+		pos + Vector3(VOXEL_SIZE, 0, 0),      # bottom-right (when viewing from back)
+		pos + Vector3(VOXEL_SIZE, VOXEL_SIZE, 0), # top-right
+		pos + Vector3(0, VOXEL_SIZE, 0),      # top-left
+		pos + Vector3(0, 0, 0)                # bottom-left
 	])
 	var color := _get_voxel_color(voxel_type)
-	_add_quad(st, vertices, Vector3.BACK, color * 0.8)
+	_add_quad(st, vertices, Vector3.BACK, color * 0.85)  # Slightly shaded
 
-## East face (+X)
+## East face (+X) - looking from right side, vertices are counter-clockwise
 func _add_east_face(st: SurfaceTool, pos: Vector3, voxel_type: int) -> void:
 	var vertices := PackedVector3Array([
-		pos + Vector3(VOXEL_SIZE, 0, VOXEL_SIZE),
-		pos + Vector3(VOXEL_SIZE, VOXEL_SIZE, VOXEL_SIZE),
-		pos + Vector3(VOXEL_SIZE, VOXEL_SIZE, 0),
-		pos + Vector3(VOXEL_SIZE, 0, 0)
+		pos + Vector3(VOXEL_SIZE, 0, VOXEL_SIZE),  # bottom-front
+		pos + Vector3(VOXEL_SIZE, VOXEL_SIZE, VOXEL_SIZE), # top-front
+		pos + Vector3(VOXEL_SIZE, VOXEL_SIZE, 0),  # top-back
+		pos + Vector3(VOXEL_SIZE, 0, 0)            # bottom-back
 	])
 	var color := _get_voxel_color(voxel_type)
-	_add_quad(st, vertices, Vector3.RIGHT, color * 0.7)
+	_add_quad(st, vertices, Vector3.RIGHT, color * 0.75)  # Medium shade
 
-## West face (-X)
+## West face (-X) - looking from left side, vertices are counter-clockwise
 func _add_west_face(st: SurfaceTool, pos: Vector3, voxel_type: int) -> void:
 	var vertices := PackedVector3Array([
-		pos + Vector3(0, 0, 0),
-		pos + Vector3(0, VOXEL_SIZE, 0),
-		pos + Vector3(0, VOXEL_SIZE, VOXEL_SIZE),
-		pos + Vector3(0, 0, VOXEL_SIZE)
+		pos + Vector3(0, 0, 0),           # bottom-back
+		pos + Vector3(0, VOXEL_SIZE, 0),   # top-back
+		pos + Vector3(0, VOXEL_SIZE, VOXEL_SIZE), # top-front
+		pos + Vector3(0, 0, VOXEL_SIZE)    # bottom-front
 	])
 	var color := _get_voxel_color(voxel_type)
-	_add_quad(st, vertices, Vector3.LEFT, color * 0.7)
+	_add_quad(st, vertices, Vector3.LEFT, color * 0.75)  # Medium shade
