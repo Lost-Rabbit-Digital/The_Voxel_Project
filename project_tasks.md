@@ -1,8 +1,12 @@
-# Steel and Cube - Project Tasks
+# Steel and Cube - Project Tasks (Voxel Engine Rebuild)
 
 > **Project Vision:** A multiplayer voxel RPG that fuses Minecraft's sandbox building, Daggerfall's deep RPG mechanics, and Stardew Valley's farming & ranching. Explore an infinite living world with dynamic seasons, weather, scattered dungeons, villages, and farms. Build together, farm together, adventure together.
 >
 > **Engine:** Godot 4.5 | **Platform:** Steam (Early Access → Full Release) | **Multiplayer:** Terraria-style (Host or Join, Multiple Characters/Worlds)
+>
+> **STATUS:** 🚧 **COMPLETE VOXEL ENGINE REBUILD IN PROGRESS** 🚧
+>
+> **See:** `VOXEL_ENGINE_PLAN.md` for detailed architecture and implementation plan
 
 **Legend:**
 - ✅ Complete
@@ -10,1238 +14,742 @@
 - ⏳ Planned
 - 🔄 Needs Refactoring
 - 🐛 Bug/Issue
+- 🔥 Critical Priority
+- 💎 High Value Feature
 
 ---
 
-## Phase 1: Core Voxel Engine (Foundation)
+## 🎯 Current Sprint: Voxel Engine Rebuild
 
-### 1.1 Voxel Rendering System
-- [x] ✅ Chunk-based terrain system
-- [x] ✅ Mesh generation with face culling
-- [x] ✅ Texture atlas support
-- [x] ✅ Multithreaded chunk generation
-- [ ] 🚧 Fix face rendering issues (current bug)
-- [ ] ⏳ Implement greedy meshing optimization
-- [ ] ⏳ Add ambient occlusion
-- [ ] ⏳ Optimize mesh generation for complex structures
+**Goal:** Build a high-performance, multiplayer-ready voxel engine from scratch using modern best practices
 
-### 1.2 World Generation
-- [x] ✅ Basic Perlin noise terrain generation
-- [x] ✅ Height-based block type selection
-- [ ] ⏳ Multiple biome support (plains, forest, desert, mountain)
-- [ ] ⏳ Caves and underground generation
-- [ ] ⏳ Ore vein generation (iron, gold, silver, mithril)
-- [ ] ⏳ Tree and vegetation placement
-- [ ] ⏳ Water and lava systems
+**Reference:** See `VOXEL_ENGINE_PLAN.md` for complete technical architecture
 
-### 1.3 Chunk Management
-- [x] ✅ Chunk loading/unloading based on distance
-- [x] ✅ Chunk caching system
-- [ ] 🔄 Implement chunk pooling (see tasks.md)
+---
+
+## Phase 1: Core Voxel Engine (Foundation) - REBUILD
+
+### 1.1 Core Data Structures
+- [ ] 🔥 Create `VoxelData` class with `PackedByteArray` storage
+- [ ] 🔥 Implement efficient voxel get/set with index formula
+- [ ] 🔥 Create `VoxelTypes` enum and block registry
+- [ ] 🔥 Create `Chunk` class with pooling support
+- [ ] ⏳ Create `ChunkCoordinate` utility class for position handling
+- [ ] ⏳ Unit tests for voxel data storage
+
+**Goal:** Efficient, memory-optimized voxel storage (4KB per 16x16x16 chunk)
+
+---
+
+### 1.2 ChunkManager (Spatial Organization)
+- [ ] 🔥 Create `ChunkManager` class
+- [ ] 🔥 Implement chunk pooling system (reuse objects, avoid GC)
+- [ ] 🔥 Distance-based chunk loading/unloading
+- [ ] 🔥 Priority queue for chunk loading (closer chunks first)
+- [ ] ⏳ Chunk neighbor caching for fast cross-chunk queries
 - [ ] ⏳ Configurable render distance
-- [ ] ⏳ Chunk save/load from disk
-- [ ] ⏳ World seed system
-- [ ] ⏳ Optimize memory usage for large worlds
+- [ ] ⏳ Chunk boundary visualization (debug mode)
 
-### 1.4 Lighting System
-- [x] ✅ Basic dynamic lighting
-- [x] ✅ Shadow system
-- [ ] ⏳ Block light propagation (torches, lava)
-- [ ] ⏳ Sunlight propagation
-- [ ] ⏳ Smooth lighting transitions
-- [ ] ⏳ Day/night cycle
-- [ ] ⏳ Colored lighting support
+**Goal:** Smooth chunk streaming with minimal performance impact
 
 ---
 
-## Phase 2: Texture Atlas System (Minecraft Beta 1.7 Style)
+### 1.3 Basic Meshing System (Naive First)
+- [ ] 🔥 Create `ChunkMeshBuilder` class
+- [ ] 🔥 Implement basic face culling (no greedy meshing yet)
+- [ ] 🔥 Proper cross-chunk face culling
+- [ ] 🔥 Generate vertex normals
+- [ ] 🔥 Generate UV coordinates (prepare for texture atlas)
+- [ ] ⏳ Debug visualization modes (wireframe, face normals, chunk boundaries)
+- [ ] ⏳ Mesh validation and error checking
 
-### 2.1 Atlas Architecture
+**Goal:** Working terrain rendering with correct face culling
 
-- [ ] ⏳ Design texture atlas layout (512x512 or 256x256)
-- [ ] ⏳ Create default vanilla texture atlas
-- [ ] ⏳ Implement single texture binding for all terrain
-- [ ] ⏳ 16x16 pixel base resolution per texture tile
-- [ ] ⏳ UV coordinate mapping system
-- [ ] ⏳ Support for different block faces (top, sides, bottom)
-- [ ] ⏳ Animated texture support (water, lava, torches)
-
-### 2.2 Resource Pack System
-
-- [ ] ⏳ Create resource pack folder structure
-- [ ] ⏳ Implement pack.json metadata parser
-- [ ] ⏳ Implement blocks.json UV mapping parser
-- [ ] ⏳ Texture atlas loader (PNG/image loading)
-- [ ] ⏳ Validation system for resource packs
-- [ ] ⏳ Fallback to default textures on error
-- [ ] ⏳ Hot-reload texture packs without restart
-
-### 2.3 Technical Features
-
-- [ ] ⏳ Mipmap generation for distant textures
-- [ ] ⏳ Point filtering for pixel-art aesthetic
-- [ ] ⏳ Alpha channel support (glass, leaves, water)
-- [ ] ⏳ Texture animation system (frame-based)
-- [ ] ⏳ Item icon rendering from atlas
-- [ ] ⏳ UI element textures in atlas
-- [ ] ⏳ Resource pack selection menu
-
-### 2.4 Default Content
-
-- [ ] ⏳ Create default block textures (dirt, grass, stone, wood, etc.)
-- [ ] ⏳ Create default item textures
-- [ ] ⏳ Create default UI textures
-- [ ] ⏳ Document texture atlas coordinates
-- [ ] ⏳ Create example resource pack
+**Note:** We'll implement greedy meshing in Phase 2 after basic system works
 
 ---
 
-## Phase 3: Dynamic World Systems
+### 1.4 TerrainGenerator (Simple First Pass)
+- [ ] 🔥 Create `TerrainGenerator` class
+- [ ] 🔥 Multi-layer noise system (continent, terrain, detail)
+- [ ] 🔥 Height-based block type selection (grass, dirt, stone)
+- [ ] ⏳ Configurable world seed
+- [ ] ⏳ Noise parameter tuning for interesting terrain
+- [ ] ⏳ Height caching for performance
 
-### 3.1 Day/Night Cycle
-
-- [ ] ⏳ Implement time progression system
-- [ ] ⏳ 24-minute day/night cycle (configurable)
-- [ ] ⏳ Sun/moon position calculation
-- [ ] ⏳ Celestial body rendering (sun, moon, stars)
-- [ ] ⏳ Dynamic skybox color changes
-- [ ] ⏳ Sunlight intensity changes throughout day
-- [ ] ⏳ Time phases (dawn, day, dusk, night)
-- [ ] ⏳ Sleep system (beds skip to morning)
-- [ ] ⏳ Multiplayer sleep voting
-- [ ] ⏳ Time display on HUD
-
-### 3.2 Weather System
-
-- [ ] ⏳ Create weather state machine
-- [ ] ⏳ Weather types (clear, cloudy, rain, thunderstorm, snow, fog, sandstorm)
-- [ ] ⏳ Weather transition system
-- [ ] ⏳ Biome-specific weather rules
-- [ ] ⏳ Rain particle effects
-- [ ] ⏳ Snow particle effects
-- [ ] ⏳ Lightning strikes (random)
-- [ ] ⏳ Thunder sound effects
-- [ ] ⏳ Rain/snow sound loops
-- [ ] ⏳ Weather affects lighting (darker during storms)
-- [ ] ⏳ Rain extinguishes open torches
-- [ ] ⏳ Snow accumulation on blocks
-- [ ] ⏳ Weather display on HUD
-
-### 3.3 Seasonal System
-
-- [ ] ⏳ Implement calendar system (days, seasons, years)
-- [ ] ⏳ Four seasons: Spring, Summer, Autumn, Winter
-- [ ] ⏳ Season length configuration (default: 4 in-game days each)
-- [ ] ⏳ Grass color changes by season
-- [ ] ⏳ Leaf color changes (green → orange/red → bare)
-- [ ] ⏳ Snow coverage in winter
-- [ ] ⏳ Water freezing in winter
-- [ ] ⏳ Seasonal weather probabilities
-- [ ] ⏳ Day length changes by season
-- [ ] ⏳ Crop growth affected by season
-- [ ] ⏳ Animal spawn rates by season
-- [ ] ⏳ Flower/plant spawning by season
-- [ ] ⏳ Season display on HUD
-- [ ] ⏳ Year counter
-
-### 3.4 Environmental Systems
-
-- [ ] ⏳ Sunlight propagation through blocks
-- [ ] ⏳ Block light sources (torches, lava, glowstone)
-- [ ] ⏳ Smooth lighting between blocks
-- [ ] ⏳ Shadow rendering from sun/moon
-- [ ] ⏳ Night vision effect (potions/spells)
-- [ ] ⏳ Fog rendering for atmosphere
-- [ ] ⏳ Temperature system (optional hardcore feature)
-- [ ] ⏳ Biome temperature mapping
-- [ ] ⏳ Temperature affects player (cold/heat damage)
+**Goal:** Generate interesting, varied terrain quickly
 
 ---
 
-## Phase 4: Multiplayer System
+### 1.5 VoxelWorld (Main Controller)
+- [ ] 🔥 Create `VoxelWorld` main node
+- [ ] 🔥 Integrate ChunkManager, MeshBuilder, TerrainGenerator
+- [ ] 🔥 Player position tracking for chunk loading
+- [ ] 🔥 Basic camera controller for testing
+- [ ] ⏳ Configuration export variables
+- [ ] ⏳ Performance monitoring (FPS, chunk count, memory)
 
-### 4.1 Networking Architecture (Terraria-Style)
-
-- [ ] ⏳ Godot 4.5 built-in networking (ENet/WebRTC)
-- [ ] ⏳ Host & Play mode (peer-to-peer, host acts as server)
-- [ ] ⏳ Join Game mode (LAN discovery and direct IP)
-- [ ] ⏳ Dedicated server option (headless, advanced)
-- [ ] ⏳ Character selection screen (multiple characters per player)
-- [ ] ⏳ World selection screen (multiple worlds, show metadata)
-- [ ] ⏳ Character save/load system (separate from world)
-- [ ] ⏳ World save/load system (separate from character)
-- [ ] ⏳ LAN game discovery
-- [ ] ⏳ Direct connect by IP interface
-
-### 4.2 Player Synchronization
-
-- [ ] ⏳ Player position and rotation sync
-- [ ] ⏳ Player animation sync
-- [ ] ⏳ Player inventory sync
-- [ ] ⏳ Player stats sync
-- [ ] ⏳ Equipment sync (visible armor/weapons on other players)
-- [ ] ⏳ Player username display above head
-- [ ] ⏳ Player list UI (Tab key)
-- [ ] ⏳ Lag compensation and prediction
-
-### 4.3 World Synchronization
-
-- [ ] ⏳ Block place/break synchronization
-- [ ] ⏳ Chunk streaming to new players
-- [ ] ⏳ Entity spawn synchronization
-- [ ] ⏳ Time/weather/season synchronization
-- [ ] ⏳ Server-authoritative validation
-- [ ] ⏳ Anti-cheat measures
-- [ ] ⏳ World save system for server
-
-### 4.4 Multiplayer Features
-
-- [ ] ⏳ Text chat system (global, local, party)
-- [ ] ⏳ Chat UI (slide-out, message history)
-- [ ] ⏳ Party system (form groups)
-- [ ] ⏳ Party UI (member list, health bars)
-- [ ] ⏳ Player markers (see friends through walls)
-- [ ] ⏳ Waypoint markers for party
-- [ ] ⏳ Trading system between players
-- [ ] ⏳ PvP toggle (server configurable)
-- [ ] ⏳ Emote system
-
-### 4.5 Server Administration
-
-- [ ] ⏳ Whitelist/blacklist system
-- [ ] ⏳ Operator permissions (admin commands)
-- [ ] ⏳ Kick/ban players
-- [ ] ⏳ Server backup system
-- [ ] ⏳ Server log files
-- [ ] ⏳ Admin panel UI
-- [ ] ⏳ Server performance monitoring
-- [ ] ⏳ Player count limits
+**Goal:** Integrated system that generates and renders terrain
 
 ---
 
-## Phase 5: Overworld Expansion
+### 1.6 Basic Collision System
+- [ ] ⏳ Generate collision meshes for chunks
+- [ ] ⏳ Use `ConcavePolygonShape3D` for terrain collision
+- [ ] ⏳ Collision shape optimization (simplified vs precise)
+- [ ] ⏳ Player can walk on terrain
+- [ ] ⏳ Basic physics response
 
-### 5.1 Biome System
+**Goal:** Walkable, physical terrain
 
-- [ ] ⏳ Temperature map generation
-- [ ] ⏳ Humidity/rainfall map generation
-- [ ] ⏳ Elevation-based biome selection
+---
+
+### 🎯 Milestone 1: Walkable Terrain
+**Success Criteria:**
+- ✅ Can walk on generated voxel terrain
+- ✅ Chunks load/unload smoothly based on player position
+- ✅ 60 FPS at render distance 8
+- ✅ No face rendering bugs
+- ✅ Memory usage <100MB for active chunks
+
+---
+
+## Phase 2: Greedy Meshing & Optimization
+
+### 2.1 Greedy Meshing Algorithm
+- [ ] 💎 Research greedy meshing algorithm (0fps.net, Voxel-Core)
+- [ ] 💎 Implement greedy meshing for Y-axis (top/bottom faces)
+- [ ] 💎 Implement greedy meshing for X-axis (east/west faces)
+- [ ] 💎 Implement greedy meshing for Z-axis (north/south faces)
+- [ ] 💎 Generate optimized quad meshes
+- [ ] ⏳ Performance comparison: naive vs greedy (target: 50-90% reduction)
+- [ ] ⏳ Unit tests for greedy meshing correctness
+
+**Goal:** Massively reduce triangle count (1200 → 200-400 per chunk)
+
+---
+
+### 2.2 Texture Atlas System
+- [ ] 💎 Create 256x256 texture atlas (16x16 textures, Minecraft Beta style)
+- [ ] 💎 Implement UV coordinate generation for atlas
+- [ ] 💎 Create `TextureAtlas` resource class
+- [ ] 💎 Block face → texture mapping system
+- [ ] ⏳ Support different textures per face (grass: top/side/bottom)
+- [ ] ⏳ Create default block textures (grass, dirt, stone, wood, etc.)
+- [ ] ⏳ Animated texture support (water, lava)
+
+**Goal:** Beautiful textured terrain with single material (minimize draw calls)
+
+---
+
+### 2.3 Material System
+- [ ] 💎 Create single `StandardMaterial3D` with atlas texture
+- [ ] 💎 Configure material properties (roughness, metallic, etc.)
+- [ ] ⏳ Support for transparent blocks (glass, water)
+- [ ] ⏳ Material variants for different biomes
+- [ ] ⏳ Resource pack system (load custom atlases)
+
+**Goal:** Efficient rendering with minimal material switches
+
+---
+
+### 2.4 Advanced Cross-Chunk Culling
+- [ ] 💎 Improve neighbor chunk queries
+- [ ] 💎 Handle chunk loading/unloading edge cases
+- [ ] ⏳ Chunk modification triggers neighbor remesh
+- [ ] ⏳ Optimize queries with chunk boundary flags
+
+**Goal:** Perfect face culling across all chunk boundaries
+
+---
+
+### 🎯 Milestone 2: Optimized Rendering
+**Success Criteria:**
+- ✅ Greedy meshing working (50%+ triangle reduction)
+- ✅ Textured terrain with atlas system
+- ✅ No visual artifacts at chunk boundaries
+- ✅ 60 FPS at render distance 12
+- ✅ Single material for all terrain (minimal draw calls)
+
+---
+
+## Phase 3: Threading & Performance
+
+### 3.1 Worker Thread System
+- [ ] 💎 Create `ChunkWorkerThread` class
+- [ ] 💎 Implement thread pool (4 worker threads)
+- [ ] 💎 Work queue with mutex protection
+- [ ] 💎 Thread-safe chunk data generation
+- [ ] ⏳ Thread-safe mesh generation
+- [ ] ⏳ Result callback system
+- [ ] ⏳ Thread shutdown and cleanup
+
+**Goal:** Keep main thread responsive (60 FPS always)
+
+---
+
+### 3.2 Async Chunk Generation
+- [ ] 💎 Move terrain generation to worker threads
+- [ ] 💎 Queue system for chunk gen requests
+- [ ] 💎 Priority system (closer chunks first)
+- [ ] ⏳ Thread pool management
+- [ ] ⏳ Error handling for failed generation
+
+**Goal:** Zero stuttering during chunk loading
+
+---
+
+### 3.3 Async Mesh Building
+- [ ] 💎 Move mesh building to worker threads
+- [ ] 💎 Use `call_deferred()` for adding meshes to scene
+- [ ] ⏳ Mesh instance pooling
+- [ ] ⏳ Batch mesh updates
+
+**Goal:** Smooth meshing without frame drops
+
+---
+
+### 3.4 Memory Management
+- [ ] 💎 Implement chunk data pooling (reuse allocations)
+- [ ] 💎 Implement mesh pooling
+- [ ] ⏳ Memory profiling and leak detection
+- [ ] ⏳ Configurable memory limits
+- [ ] ⏳ Automatic chunk unloading when memory constrained
+
+**Goal:** Minimal garbage collection, stable memory usage
+
+---
+
+### 🎯 Milestone 3: Threaded Performance
+**Success Criteria:**
+- ✅ Chunk gen/meshing happens off main thread
+- ✅ Consistent 60 FPS even during heavy chunk loading
+- ✅ Memory usage stable (no leaks)
+- ✅ Can handle render distance 16
+- ✅ <50MB GC pressure per minute
+
+---
+
+## Phase 4: World Generation Features
+
+### 4.1 Biome System
+- [ ] 💎 Temperature noise map
+- [ ] 💎 Moisture noise map
+- [ ] 💎 Biome selection algorithm
+- [ ] ⏳ Plains biome (grass, flowers)
+- [ ] ⏳ Forest biome (trees, bushes)
+- [ ] ⏳ Desert biome (sand, cacti)
+- [ ] ⏳ Mountain biome (stone, snow peaks)
 - [ ] ⏳ Biome blending at borders
-- [ ] ⏳ Plains biome
-- [ ] ⏳ Forest biome (oak, birch trees)
-- [ ] ⏳ Hills biome
-- [ ] ⏳ Taiga biome (pine trees, snow patches)
-- [ ] ⏳ Tundra biome (snow, ice)
-- [ ] ⏳ Mountain biome (high elevation, stone, snow peaks)
-- [ ] ⏳ Desert biome (sand, cacti, sandstorms)
-- [ ] ⏳ Savanna biome (dry grass, acacia)
-- [ ] ⏳ Biome-specific block types
-- [ ] ⏳ Biome-specific vegetation
+- [ ] ⏳ Biome-specific block palettes
 
-### 5.2 Structure Generation
-
-#### Villages
-- [ ] ⏳ Village location algorithm (plains, forests)
-- [ ] ⏳ Village building templates (houses, blacksmith, inn, temple, town hall)
-- [ ] ⏳ Procedural village layout
-- [ ] ⏳ Village paths and roads
-- [ ] ⏳ NPC population spawning (10-20 NPCs)
-- [ ] ⏳ Village safe zones (no enemy spawns)
-- [ ] ⏳ Village guards
-- [ ] ⏳ Village farms and fields
-
-#### Towns
-- [ ] ⏳ Town generation (larger, rarer than villages)
-- [ ] ⏳ District system (merchant, noble, mage, thieves)
-- [ ] ⏳ Guild hall structures
-- [ ] ⏳ Town walls and gates
-- [ ] ⏳ Town NPC population (100+)
-- [ ] ⏳ Town market squares
-
-#### Dungeons
-- [ ] ⏳ Dungeon entrance placement algorithm
-- [ ] ⏳ Entrance types (cave mouths, ruins, mine shafts, crypts, towers)
-- [ ] ⏳ Visible entrance structures in overworld
-- [ ] ⏳ Entrance difficulty indicators
-- [ ] ⏳ Link overworld entrances to instanced dungeons
-
-#### Natural Structures
-- [ ] ⏳ Cave system generation (underground)
-- [ ] ⏳ Ravine generation (surface cracks)
-- [ ] ⏳ Ancient ruins (scattered structures)
-- [ ] ⏳ Abandoned mines
-- [ ] ⏳ Ore vein placement
-- [ ] ⏳ Underground lakes and lava pools
-
-### 5.3 World Persistence
-
-- [ ] ⏳ Infinite world generation (seed-based)
-- [ ] ⏳ Chunk save/load system
-- [ ] ⏳ Block modification persistence
-- [ ] ⏳ Structure state persistence
-- [ ] ⏳ NPC state persistence
-- [ ] ⏳ Time/weather/season persistence
-- [ ] ⏳ Player claim system (anti-griefing)
-- [ ] ⏳ Claim visualization
+**Goal:** Diverse, interesting world regions
 
 ---
 
-## Phase 6: Daggerfall-Style RPG Systems
+### 4.2 Cave Generation
+- [ ] 💎 3D Perlin worm caves
+- [ ] ⏳ Cave system connectivity
+- [ ] ⏳ Cave entrance placement
+- [ ] ⏳ Underground lakes
+- [ ] ⏳ Stalactites and stalagmites
 
-### 6.1 Character System
-
-#### Attributes
-- [ ] ⏳ Create `CharacterStats` class
-- [ ] ⏳ Implement 8 core attributes (STR, INT, WIL, AGI, END, PER, SPD, LCK)
-- [ ] ⏳ Attribute point allocation on level up
-- [ ] ⏳ Derived stats calculation (health, mana, stamina from attributes)
-- [ ] ⏳ Attribute modifiers from equipment
-- [ ] ⏳ Temporary attribute buffs/debuffs
-
-#### Skills System
-- [ ] ⏳ Create `SkillManager` class
-- [ ] ⏳ Implement 18 skills with progress tracking
-- [ ] ⏳ Skill improvement through use
-- [ ] ⏳ Skill level multipliers for actions
-- [ ] ⏳ Major/minor skill designation
-- [ ] ⏳ Skill books for instant skill gains
-- [ ] ⏳ Trainer NPCs for skill training
-
-#### Leveling System
-- [ ] ⏳ Experience point system
-- [ ] ⏳ Level-up trigger and UI
-- [ ] ⏳ Skill-based leveling (major skills contribute to level)
-- [ ] ⏳ Perk/ability selection on level up
-- [ ] ⏳ Level scaling for enemies and loot
-
-#### Character Creation
-- [ ] ⏳ Character creation screen
-- [ ] ⏳ Race selection (human, elf, orc, etc.)
-- [ ] ⏳ Class selection or custom class builder
-- [ ] ⏳ Starting attribute allocation
-- [ ] ⏳ Birth sign/zodiac selection (passive bonuses)
-- [ ] ⏳ Appearance customization (if desired)
-
-### 6.2 Inventory System
-
-- [ ] ⏳ Create `InventoryManager` class
-- [ ] ⏳ Grid-based inventory data structure
-- [ ] ⏳ Weight-based carrying capacity
-- [ ] ⏳ Item pickup and drop functionality
-- [ ] ⏳ Item stacking for stackable items
-- [ ] ⏳ Equipment slots (head, chest, legs, feet, hands, weapon, shield, rings, amulet)
-- [ ] ⏳ Paper doll visualization
-- [ ] ⏳ Inventory UI with Daggerfall aesthetic
-- [ ] ⏳ Item tooltip system
-- [ ] ⏳ Inventory sorting and filtering
-- [ ] ⏳ Quick-access hotbar (9 slots)
-
-### 6.3 Item System
-
-#### Core Item Framework
-- [ ] ⏳ Create `Item` base class
-- [ ] ⏳ Item types (weapon, armor, consumable, material, misc)
-- [ ] ⏳ Item rarity system (common, uncommon, rare, epic, legendary)
-- [ ] ⏳ Item durability system
-- [ ] ⏳ Item repair mechanics
-
-#### Weapons
-- [ ] ⏳ Weapon base class with damage, speed, range
-- [ ] ⏳ Weapon types: swords, axes, maces, daggers, bows, staves
-- [ ] ⏳ Material tiers (wood, iron, steel, silver, mithril, daedric)
-- [ ] ⏳ Weapon skill requirements
-- [ ] ⏳ Attack type modifiers (slash, thrust, overhead)
-
-#### Armor
-- [ ] ⏳ Armor base class with defense rating
-- [ ] ⏳ Armor types: light (leather), medium (chainmail), heavy (plate)
-- [ ] ⏳ Material tiers matching weapon tiers
-- [ ] ⏳ Armor weight affects speed and stamina
-- [ ] ⏳ Set bonuses for matching armor pieces
-
-#### Consumables
-- [ ] ⏳ Potion system (health, mana, stamina, buff potions)
-- [ ] ⏳ Food system (hunger mechanic - optional)
-- [ ] ⏳ Scrolls (single-use spell casting)
-- [ ] ⏳ Potion effects and duration
-
-### 6.4 Daggerfall-Style HUD
-
-- [ ] ⏳ Design HUD layout mockup
-- [ ] ⏳ Implement compass at top center
-- [ ] ⏳ Health bar (red) at bottom left
-- [ ] ⏳ Mana bar (blue) at bottom left
-- [ ] ⏳ Stamina bar (yellow) at bottom left
-- [ ] ⏳ Hotbar with 9 slots at bottom center
-- [ ] ⏳ Mini-map or dungeon map indicator
-- [ ] ⏳ Quest objective tracker
-- [ ] ⏳ Active effects/buffs display
-- [ ] ⏳ Current weapon/spell display
-- [ ] ⏳ Cursor/crosshair for interaction
-
-### 6.5 Menu Interfaces
-
-- [ ] ⏳ Main menu (continue, new game, load, settings, quit)
-- [ ] ⏳ Pause menu (resume, character, inventory, map, settings, quit)
-- [ ] ⏳ Character sheet UI (stats, skills, effects)
-- [ ] ⏳ Inventory UI with paper doll
-- [ ] ⏳ Map/automap UI
-- [ ] ⏳ Spell book UI
-- [ ] ⏳ Settings/options menu
-- [ ] ⏳ Dialogue interface
-- [ ] ⏳ Merchant/trading interface
-- [ ] ⏳ Daggerfall-style parchment/paper aesthetic
+**Goal:** Explorable underground cave networks
 
 ---
 
-## Phase 7: Mining ## Phase 19: Mining & Building Building (Minecraft-Inspired)
+### 4.3 Ore & Resource Generation
+- [ ] 💎 Ore vein generation (iron, gold, coal, etc.)
+- [ ] ⏳ Vein size and rarity configuration
+- [ ] ⏳ Height-based ore distribution
+- [ ] ⏳ Cluster generation for common ores
 
-### 7.1 Mining System
-
-- [ ] ⏳ Implement block breaking mechanic
-- [ ] ⏳ Block break animation and particles
-- [ ] ⏳ Block hardness values
-- [ ] ⏳ Tool effectiveness (pickaxe for stone, axe for wood, shovel for dirt)
-- [ ] ⏳ Mining skill affects mining speed
-- [ ] ⏳ Add blocks to inventory when mined
-- [ ] ⏳ Drop items when breaking certain blocks (ore → ore items)
-- [ ] ⏳ Fortune/efficiency tool enchantments
-
-### 7.2 Building System
-
-- [ ] ⏳ Implement block placement mechanic
-- [ ] ⏳ Block placement preview
-- [ ] ⏳ Collision detection for placement
-- [ ] ⏳ Building skill affects placement speed/accuracy
-- [ ] ⏳ Rotation for directional blocks
-- [ ] ⏳ Multi-block structures (doors, beds, tables)
-- [ ] ⏳ Scaffolding or temporary blocks
-
-### 7.3 Block Types
-
-#### Natural Blocks
-- [ ] ⏳ Stone, Cobblestone, Smooth Stone
-- [ ] ⏳ Dirt, Grass, Sand, Gravel
-- [ ] ⏳ Wood logs (oak, pine, birch)
-- [ ] ⏳ Ore blocks (iron, gold, silver, mithril, gems)
-- [ ] ⏳ Water and lava blocks
-- [ ] ⏳ Clay, ice, snow
-
-#### Crafted Blocks
-- [ ] ⏳ Wooden planks, stone bricks, brick blocks
-- [ ] ⏳ Glass, stained glass
-- [ ] ⏳ Torches, lanterns, candles
-- [ ] ⏳ Ladders, stairs, slabs
-- [ ] ⏳ Doors (wood, iron, steel)
-- [ ] ⏳ Chests and storage containers
-- [ ] ⏳ Crafting tables, forges, enchanting tables
-- [ ] ⏳ Furniture blocks (decorative)
-
-### 7.4 Tools
-
-- [ ] ⏳ Implement tool system
-- [ ] ⏳ Tool types: pickaxe, axe, shovel, hoe
-- [ ] ⏳ Tool material tiers (wood, stone, iron, steel, mithril)
-- [ ] ⏳ Tool durability and breakage
-- [ ] ⏳ Tool enchantments
-- [ ] ⏳ Tool crafting recipes
+**Goal:** Incentivize mining and exploration
 
 ---
 
-## Phase 8: Farming System (Stardew Valley-Inspired)
+### 4.4 Vegetation & Structures
+- [ ] 💎 Tree generation (multiple types: oak, pine, birch)
+- [ ] ⏳ Grass and flower placement
+- [ ] ⏳ Boulder placement
+- [ ] ⏳ Ensure structures don't break chunk borders
 
-### 8.1 Crop System
-
-- [ ] ⏳ Implement tilling mechanic (hoe tool)
-- [ ] ⏳ Tilled soil block type
-- [ ] ⏳ Seed item types (spring, summer, autumn)
-- [ ] ⏳ Plant seeds on tilled soil
-- [ ] ⏳ Crop growth stages (visual progression)
-- [ ] ⏳ Crop growth timer system
-- [ ] ⏳ Season-appropriate planting requirements
-- [ ] ⏳ Crop death on season change
-- [ ] ⏳ Harvest mechanic (break mature crop)
-- [ ] ⏳ Crop yield and quality system
-- [ ] ⏳ Multi-harvest crops (tomatoes, berries, corn)
-- [ ] ⏳ Giant crops (3x3 rare spawns)
-
-### 8.2 Watering & Soil
-
-- [ ] ⏳ Watering can tool
-- [ ] ⏳ Soil moisture system (dry → wet)
-- [ ] ⏳ Daily moisture decay (crops need water)
-- [ ] ⏳ Rain auto-waters crops
-- [ ] ⏳ Fertilizer system (speed, quality)
-- [ ] ⏳ Soil quality levels
-- [ ] ⏳ Fertilizer crafting recipes
-
-### 8.3 Sprinklers & Automation
-
-- [ ] ⏳ Basic sprinkler (4 tiles, + pattern)
-- [ ] ⏳ Quality sprinkler (8 tiles, 3x3)
-- [ ] ⏳ Iridium sprinkler (24 tiles, 5x5)
-- [ ] ⏳ Automatic daily watering
-- [ ] ⏳ Sprinkler crafting recipes
-- [ ] ⏳ Scarecrow (prevents crow damage)
-
-### 8.4 Animals & Ranching
-
-- [ ] ⏳ Chicken coop structure (buildable)
-- [ ] ⏳ Barn structure (buildable)
-- [ ] ⏳ Animal spawning system
-- [ ] ⏳ Chickens (eggs daily)
-- [ ] ⏳ Cows (milk daily)
-- [ ] ⏳ Sheep (wool every 3 days)
-- [ ] ⏳ Pigs (truffles when outside)
-- [ ] ⏳ Animal feeding system (hay, grass)
-- [ ] ⏳ Animal happiness/friendship system
-- [ ] ⏳ Pet interaction (increases happiness)
-- [ ] ⏳ Product quality based on happiness
-- [ ] ⏳ Silo structure (hay storage)
-- [ ] ⏳ Hay cutting from grass
-
-### 8.5 Artisan Processing
-
-- [ ] ⏳ Keg (crops → wine, beer, juice)
-- [ ] ⏳ Preserves jar (crops → jams, pickles)
-- [ ] ⏳ Cheese press (milk → cheese)
-- [ ] ⏳ Mayonnaise machine (eggs → mayo)
-- [ ] ⏳ Loom (wool → cloth)
-- [ ] ⏳ Oil maker (sunflowers, corn → oil)
-- [ ] ⏳ Processing time system
-- [ ] ⏳ Quality preservation in processing
-- [ ] ⏳ Artisan goods value multipliers
-
-### 8.6 Greenhouse
-
-- [ ] ⏳ Greenhouse structure (buildable or quest reward)
-- [ ] ⏳ Year-round crop growth inside
-- [ ] ⏳ No seasonal death for greenhouse crops
-- [ ] ⏳ Slightly faster growth rate
-- [ ] ⏳ Limited interior space
-
-### 8.7 Farming Skills
-
-- [ ] ⏳ Farming skill XP system
-- [ ] ⏳ Gain XP from harvesting crops and animal products
-- [ ] ⏳ Farming level perks (0-100)
-  - [ ] ⏳ Level 10: Crops sell for 5% more
-  - [ ] ⏳ Level 20: Quality sprinkler recipe
-  - [ ] ⏳ Level 30: 10% faster growth
-  - [ ] ⏳ Level 40: Iridium sprinkler recipe
-  - [ ] ⏳ Level 50: Higher quality chance
-  - [ ] ⏳ Level 60: Crops sell for 10% more
-  - [ ] ⏳ Level 70: Animal products worth more
-  - [ ] ⏳ Level 80: Deluxe barn/coop recipes
-  - [ ] ⏳ Level 90: Greenhouse blueprint
-  - [ ] ⏳ Level 100: Chance for double harvest
-
-### 8.8 Farming Integration
-
-- [ ] ⏳ Seed merchants in villages/towns
-- [ ] ⏳ Sell crops to merchants
-- [ ] ⏳ Crop prices fluctuate by season
-- [ ] ⏳ Cooking recipes use crops
-- [ ] ⏳ Alchemy recipes use crops/flowers
-- [ ] ⏳ "Deliver crops" quests
-- [ ] ⏳ Festival crop competitions
-- [ ] ⏳ Multiplayer shared farm space
-- [ ] ⏳ Gifting crops to players/NPCs
-
-### 8.9 Advanced Farming
-
-- [ ] ⏳ Seed maker (crop → seeds)
-- [ ] ⏳ Crop mutations (rare hybrids)
-- [ ] ⏳ Ancient fruit (rare, year-round, high value)
-- [ ] ⏳ Sweet gem berry (most valuable)
-- [ ] ⏳ Community center crop bundles
-- [ ] ⏳ Seasonal festivals with farming events
-- [ ] ⏳ Farm animals can breed
-- [ ] ⏳ Animal variants (brown chicken, white cow, etc.)
+**Goal:** Living, organic-feeling world
 
 ---
 
-## Phase 9: Combat & Magic Systems
+### 4.5 Water & Liquid System
+- [ ] ⏳ Water block type
+- [ ] ⏳ Lava block type
+- [ ] ⏳ Transparent rendering for water
+- [ ] ⏳ Water surface detection
+- [ ] ⏳ Simple fluid simulation (Phase 2 feature)
 
-### 9.1 Melee Combat
-
-- [ ] ⏳ First-person melee attack system
-- [ ] ⏳ Directional attacks (slash, thrust, overhead) based on mouse movement
-- [ ] ⏳ Stamina consumption for attacks
-- [ ] ⏳ Weapon swing animations
-- [ ] ⏳ Hit detection and damage application
-- [ ] ⏳ Weapon reach/range
-- [ ] ⏳ Attack speed based on weapon and agility
-- [ ] ⏳ Critical hit system (luck-based)
-- [ ] ⏳ Weapon skill affects damage and accuracy
-- [ ] ⏳ Dual-wielding support
-
-### 8.2 Blocking ### 16.2 Blocking & Defense Defense
-
-- [ ] ⏳ Shield blocking mechanic (hold right-click)
-- [ ] ⏳ Block effectiveness based on shield type and skill
-- [ ] ⏳ Stamina drain while blocking
-- [ ] ⏳ Timed parry system (perfect block)
-- [ ] ⏳ Block animations
-- [ ] ⏳ Shield bash ability
-
-### 9.3 Ranged Combat
-
-- [ ] ⏳ Bow and arrow system
-- [ ] ⏳ Draw and release mechanic (hold to charge)
-- [ ] ⏳ Arrow trajectory and physics
-- [ ] ⏳ Crossbow variant (faster reload, no charge)
-- [ ] ⏳ Ammunition system (arrows in inventory)
-- [ ] ⏳ Archery skill affects accuracy and damage
-- [ ] ⏳ Different arrow types (fire, poison, etc.)
-
-### 9.4 Magic System
-
-#### Spell Framework
-- [ ] ⏳ Create `Spell` base class
-- [ ] ⏳ Spell schools (Destruction, Restoration, Alteration, Illusion)
-- [ ] ⏳ Mana cost calculation
-- [ ] ⏳ Spell casting animation
-- [ ] ⏳ Spell projectile system
-- [ ] ⏳ Spell effect application
-- [ ] ⏳ Magic skill affects spell power and cost
-
-#### Destruction Spells
-- [ ] ⏳ Fireball (explosive projectile)
-- [ ] ⏳ Lightning Bolt (instant hit)
-- [ ] ⏳ Ice Spike (slowing projectile)
-- [ ] ⏳ Fire Stream (continuous damage)
-- [ ] ⏳ Area-of-effect spells
-
-#### Restoration Spells
-- [ ] ⏳ Heal Self
-- [ ] ⏳ Heal Other
-- [ ] ⏳ Cure Disease/Poison
-- [ ] ⏳ Fortify Attribute (temporary buffs)
-- [ ] ⏳ Regeneration over time
-
-#### Alteration Spells
-- [ ] ⏳ Light (create light source)
-- [ ] ⏳ Levitate (flight/hovering)
-- [ ] ⏳ Open Lock (unlock chests/doors)
-- [ ] ⏳ Water Walking
-- [ ] ⏳ Shield (damage absorption)
-
-#### Illusion Spells
-- [ ] ⏳ Invisibility
-- [ ] ⏳ Calm (reduce enemy aggression)
-- [ ] ⏳ Fear (make enemies flee)
-- [ ] ⏳ Charm (improve NPC disposition)
-- [ ] ⏳ Detect Life
-
-#### Spell Management
-- [ ] ⏳ Spell book UI
-- [ ] ⏳ Spell learning from tomes
-- [ ] ⏳ Spell hotkeys
-- [ ] ⏳ Spell crafting system (advanced feature)
-
-### 9.5 Combat Effects
-
-- [ ] ⏳ Damage numbers display
-- [ ] ⏳ Blood/hit particle effects
-- [ ] ⏳ Screen shake on hit
-- [ ] ⏳ Hit sounds and feedback
-- [ ] ⏳ Knockback system
-- [ ] ⏳ Status effects (poison, fire, frost, bleeding)
-- [ ] ⏳ Death animations
-- [ ] ⏳ Ragdoll physics (optional)
+**Goal:** Lakes, rivers, oceans
 
 ---
 
-## Phase 10: Enemy System
-
-### 10.1 Enemy AI Framework
-
-- [ ] ⏳ Create `Enemy` base class
-- [ ] ⏳ Enemy stats (health, damage, speed, armor)
-- [ ] ⏳ AI state machine (idle, patrol, chase, attack, flee)
-- [ ] ⏳ Pathfinding through voxel terrain
-- [ ] ⏳ Line-of-sight detection
-- [ ] ⏳ Hearing system (detect player noise)
-- [ ] ⏳ Group AI (enemies coordinate attacks)
-- [ ] ⏳ Enemy level scaling
-
-### 10.2 Enemy Types
-
-#### Tier 1 Enemies (Level 1-5)
-- [ ] ⏳ Rat (weak, fast)
-- [ ] ⏳ Bat (flying, weak)
-- [ ] ⏳ Wolf (moderate, pack behavior)
-- [ ] ⏳ Goblin (humanoid, basic weapons)
-- [ ] ⏳ Bandit (humanoid, various weapons)
-- [ ] ⏳ Skeleton (undead, melee)
-- [ ] ⏳ Zombie (undead, slow, high health)
-
-#### Tier 2 Enemies (Level 6-15)
-- [ ] ⏳ Orc (strong melee)
-- [ ] ⏳ Troll (high health, regeneration)
-- [ ] ⏳ Ghost (incorporeal, magic attacks)
-- [ ] ⏳ Wraith (undead, life drain)
-- [ ] ⏳ Giant Spider (poison attacks)
-- [ ] ⏳ Giant Scorpion (armored, poison)
-- [ ] ⏳ Dark Cultist (magic user)
-
-#### Tier 3 Enemies (Level 16-25)
-- [ ] ⏳ Vampire (lifesteal, fast)
-- [ ] ⏳ Dark Knight (heavy armor, strong attacks)
-- [ ] ⏳ Demon (fire attacks, high damage)
-- [ ] ⏳ Lich (powerful magic, undead)
-- [ ] ⏳ Gargoyle (flying, stone skin)
-- [ ] ⏳ Daedra (varied abilities)
-
-#### Boss Enemies
-- [ ] ⏳ Dragon (flying boss, breath attacks)
-- [ ] ⏳ Ancient Lich (magic boss)
-- [ ] ⏳ Demon Lord (melee boss)
-- [ ] ⏳ Vampire Lord (hybrid boss)
-
-### 10.3 Enemy Features
-
-- [ ] ⏳ Enemy animations (idle, walk, attack, death)
-- [ ] ⏳ Enemy sounds (growls, attacks, death)
-- [ ] ⏳ Loot drops on death
-- [ ] ⏳ Experience points on kill
-- [ ] ⏳ Rare enemy variants (elites with better loot)
-- [ ] ⏳ Enemy spawn system
-- [ ] ⏳ Enemy respawn timers
+### 🎯 Milestone 4: Rich World Generation
+**Success Criteria:**
+- ✅ Multiple distinct biomes
+- ✅ Underground caves
+- ✅ Ores scattered throughout
+- ✅ Trees and vegetation
+- ✅ Water bodies
+- ✅ Interesting, explorable world
 
 ---
 
-## Phase 11: Dungeon Generation System
+## Phase 5: Block Interaction System
 
-### 11.1 Dungeon Architecture
+### 5.1 Voxel Raycasting
+- [ ] 💎 Implement DDA raycasting algorithm
+- [ ] 💎 Ray-voxel intersection detection
+- [ ] 💎 Return hit block position and face
+- [ ] ⏳ Configurable max ray distance
+- [ ] ⏳ Highlight targeted block (visual feedback)
 
-- [ ] ⏳ Create `DungeonGenerator` class
-- [ ] ⏳ Room-based generation algorithm
-- [ ] ⏳ Corridor connection system
-- [ ] ⏳ Multi-level dungeons (stairs up/down)
-- [ ] ⏳ Room templates (varied layouts)
-- [ ] ⏳ Ensure all rooms are accessible
-- [ ] ⏳ Dead-end rooms with rewards
-- [ ] ⏳ Secret room generation
-
-### 11.2 Dungeon Features
-
-- [ ] ⏳ Entrance/exit markers
-- [ ] ⏳ Treasure chests (locked and unlocked)
-- [ ] ⏳ Locked doors (require keys or lockpicking)
-- [ ] ⏳ Pressure plate traps
-- [ ] ⏳ Arrow traps
-- [ ] ⏳ Spike pits
-- [ ] ⏳ Lava/water hazards
-- [ ] ⏳ Collapsing floors
-- [ ] ⏳ Boss rooms (larger, special design)
-- [ ] ⏳ Lore objects (books, tablets)
-
-### 11.3 Dungeon Types
-
-- [ ] ⏳ Crypts (undead theme, dark)
-- [ ] ⏳ Caves (natural formations, wildlife)
-- [ ] ⏳ Ancient Ruins (stone architecture, magic enemies)
-- [ ] ⏳ Abandoned Mines (ore veins, industrial hazards)
-- [ ] ⏳ Sewers (water, rats, bandits)
-- [ ] ⏳ Towers (vertical layout, multiple floors)
-
-### 11.4 Dungeon Difficulty
-
-- [ ] ⏳ Difficulty scaling based on depth
-- [ ] ⏳ Higher-tier enemies in deeper levels
-- [ ] ⏳ Better loot in harder dungeons
-- [ ] ⏳ Environmental difficulty (less light, more traps)
-- [ ] ⏳ Dungeon level indicator
+**Goal:** Accurate block targeting for interaction
 
 ---
 
-## Phase 12: Loot & Economy
+### 5.2 Block Breaking
+- [ ] 💎 Remove voxel at raycast hit position
+- [ ] 💎 Trigger chunk remesh on block change
+- [ ] 💎 Block break animation/particles
+- [ ] ⏳ Block hardness property
+- [ ] ⏳ Tool effectiveness (pickaxe for stone, etc.)
+- [ ] ⏳ Mining skill affects break speed
+- [ ] ⏳ Drop item on break
 
-### 12.1 Loot System
-
-- [ ] ⏳ Create `LootTable` system
-- [ ] ⏳ Randomized loot generation
-- [ ] ⏳ Rarity-based drop rates
-- [ ] ⏳ Level-appropriate loot
-- [ ] ⏳ Chest loot tables
-- [ ] ⏳ Enemy-specific loot tables
-- [ ] ⏳ Boss guaranteed rare loot
-- [ ] ⏳ Gold/currency drops
-
-### 12.2 Currency System
-
-- [ ] ⏳ Gold currency
-- [ ] ⏳ Currency display in UI
-- [ ] ⏳ Pick up gold from enemies/chests
-- [ ] ⏳ Store gold value on items
-
-### 12.3 Merchant System
-
-- [ ] ⏳ Create `Merchant` NPC type
-- [ ] ⏳ Merchant inventory system
-- [ ] ⏳ Buy interface
-- [ ] ⏳ Sell interface
-- [ ] ⏳ Merchant gold limits
-- [ ] ⏳ Personality affects prices
-- [ ] ⏳ Merchant inventory refresh
-- [ ] ⏳ Specialized merchants (blacksmith, alchemist, general goods)
+**Goal:** Satisfying block destruction
 
 ---
 
-## Phase 13: Crafting System
+### 5.3 Block Placement
+- [ ] 💎 Place voxel adjacent to raycast hit face
+- [ ] 💎 Trigger chunk remesh on placement
+- [ ] 💎 Collision check (can't place in player)
+- [ ] ⏳ Block rotation for directional blocks
+- [ ] ⏳ Placement validation rules
+- [ ] ⏳ Building skill affects placement speed
 
-### 13.1 Crafting Framework
-
-- [ ] ⏳ Create `CraftingSystem` class
-- [ ] ⏳ Recipe data structure
-- [ ] ⏳ Crafting UI interface
-- [ ] ⏳ Material checking and consumption
-- [ ] ⏳ Crafting skill requirements
-- [ ] ⏳ Success/failure system (skill-based)
-- [ ] ⏳ Recipe discovery system
-
-### 13.2 Crafting Stations
-
-- [ ] ⏳ Crafting Table (general crafting)
-- [ ] ⏳ Forge (weapons, armor, ingots)
-- [ ] ⏳ Alchemy Lab (potions)
-- [ ] ⏳ Enchanting Table (enchantments)
-- [ ] ⏳ Tanning Rack (leather processing)
-
-### 13.3 Recipes
-
-#### Smithing Recipes
-- [ ] ⏳ Weapons (by material tier)
-- [ ] ⏳ Armor pieces (by material tier)
-- [ ] ⏳ Tools (pickaxe, axe, shovel)
-- [ ] ⏳ Ingot smelting from ore
-
-#### Alchemy Recipes
-- [ ] ⏳ Health potions (minor, normal, major)
-- [ ] ⏳ Mana potions
-- [ ] ⏳ Stamina potions
-- [ ] ⏳ Buff potions (strength, speed, etc.)
-- [ ] ⏳ Resistance potions (fire, frost, poison)
-- [ ] ⏳ Poisons (for weapon coating)
-
-#### General Crafting
-- [ ] ⏳ Torches
-- [ ] ⏳ Arrows
-- [ ] ⏳ Building blocks
-- [ ] ⏳ Furniture
-- [ ] ⏳ Doors, chests, containers
-
-#### Enchanting
-- [ ] ⏳ Weapon enchantments
-- [ ] ⏳ Armor enchantments
-- [ ] ⏳ Soul gems as reagents
-- [ ] ⏳ Enchantment strength levels
+**Goal:** Satisfying block building
 
 ---
 
-## Phase 14: NPC & Dialogue System
+### 5.4 Inventory Integration
+- [ ] ⏳ Blocks added to inventory on break
+- [ ] ⏳ Blocks consumed from inventory on place
+- [ ] ⏳ Hotbar for quick block selection
+- [ ] ⏳ Creative mode (infinite blocks)
+- [ ] ⏳ Survival mode (limited blocks)
 
-### 14.1 NPC Framework
-
-- [ ] ⏳ Create `NPC` base class
-- [ ] ⏳ NPC pathfinding and movement
-- [ ] ⏳ NPC daily schedules (optional)
-- [ ] ⏳ NPC dialogue trees
-- [ ] ⏳ NPC relationship/disposition system
-- [ ] ⏳ Named vs. generic NPCs
-
-### 14.2 NPC Types
-
-- [ ] ⏳ Merchants
-- [ ] ⏳ Trainers (skill training)
-- [ ] ⏳ Quest givers
-- [ ] ⏳ Guards
-- [ ] ⏳ Innkeepers
-- [ ] ⏳ Commoners
-
-### 14.3 Dialogue System
-
-- [ ] ⏳ Dialogue UI (Daggerfall-style)
-- [ ] ⏳ Branching dialogue options
-- [ ] ⏳ Personality-based responses
-- [ ] ⏳ Quest dialogue triggers
-- [ ] ⏳ Rumors and lore
-- [ ] ⏳ Persuasion mini-game (optional)
-
-### 13.4 Towns ### 17.4 Towns & Villages Villages
-
-- [ ] ⏳ Procedural village generation
-- [ ] ⏳ Pre-built town structures
-- [ ] ⏳ Inns (rest, buy food)
-- [ ] ⏳ Shops (merchants)
-- [ ] ⏳ Guild halls
-- [ ] ⏳ Town guards
-- [ ] ⏳ Safe zones (no combat)
+**Goal:** Complete build/destroy gameplay loop
 
 ---
 
-## Phase 15: Quest System
-
-### 15.1 Quest Framework
-
-- [ ] ⏳ Create `Quest` class
-- [ ] ⏳ Quest objective tracking
-- [ ] ⏳ Quest log UI
-- [ ] ⏳ Quest givers and turn-in
-- [ ] ⏳ Quest rewards (XP, gold, items)
-- [ ] ⏳ Quest stages and progression
-
-### 15.2 Quest Types
-
-- [ ] ⏳ Kill quests (defeat X enemies)
-- [ ] ⏳ Fetch quests (retrieve item from dungeon)
-- [ ] ⏳ Delivery quests (take item to NPC)
-- [ ] ⏳ Escort quests (protect NPC)
-- [ ] ⏳ Exploration quests (discover location)
-- [ ] ⏳ Bounty quests (hunt specific enemy)
-
-### 15.3 Main Quest Line (Optional)
-
-- [ ] ⏳ Overarching storyline
-- [ ] ⏳ Unique quest rewards
-- [ ] ⏳ Story dungeons
-- [ ] ⏳ Climactic boss fights
-
-### 15.4 Guild Quests (Future)
-
-- [ ] ⏳ Fighters Guild questline
-- [ ] ⏳ Mages Guild questline
-- [ ] ⏳ Thieves Guild questline
-- [ ] ⏳ Guild ranks and progression
+### 🎯 Milestone 5: Minecraft-Style Building
+**Success Criteria:**
+- ✅ Can break blocks
+- ✅ Can place blocks
+- ✅ Chunks remesh instantly on change
+- ✅ Inventory integration works
+- ✅ Feels responsive and satisfying
 
 ---
 
-## Phase 16: Saving & Persistence
+## Phase 6: Save & Load System
 
-### 16.1 Save System
+### 6.1 Chunk Serialization
+- [ ] 💎 Serialize chunk voxel data to bytes
+- [ ] 💎 Compress chunk data (GZip or similar)
+- [ ] ⏳ Delta encoding for mostly-air chunks
+- [ ] ⏳ Chunk metadata (modified flag, timestamp)
 
-- [ ] ⏳ Create save file format
-- [ ] ⏳ Save player character data
-- [ ] ⏳ Save inventory and equipment
-- [ ] ⏳ Save world/chunk modifications
-- [ ] ⏳ Save quest progress
-- [ ] ⏳ Save NPC states
-- [ ] ⏳ Multiple save slots
-- [ ] ⏳ Auto-save functionality
+**Goal:** Efficient chunk storage format
+
+---
+
+### 6.2 World Save System
+- [ ] 💎 Region file format (group chunks into regions)
+- [ ] 💎 Save modified chunks to disk
+- [ ] 💎 World metadata (seed, time, player pos)
+- [ ] ⏳ Incremental saves (auto-save every N minutes)
 - [ ] ⏳ Save on exit
 
-### 16.2 Load System
-
-- [ ] ⏳ Load character data
-- [ ] ⏳ Load world state
-- [ ] ⏳ Load quest progress
-- [ ] ⏳ Continue from last save
-- [ ] ⏳ Load game menu
+**Goal:** Persistent world state
 
 ---
 
-## Phase 17: Audio & Music
+### 6.3 World Load System
+- [ ] 💎 Load chunks from disk on demand
+- [ ] 💎 Fall back to generation if chunk not saved
+- [ ] 💎 Load world metadata
+- [ ] ⏳ Background loading (threaded)
+- [ ] ⏳ Load progress UI
 
-### 17.1 Sound Effects
-
-- [ ] ⏳ Footstep sounds (varied by surface)
-- [ ] ⏳ Weapon swing and impact sounds
-- [ ] ⏳ Magic casting sounds
-- [ ] ⏳ Enemy sounds (attacks, deaths, idle)
-- [ ] ⏳ Mining/breaking block sounds
-- [ ] ⏳ Placing block sounds
-- [ ] ⏳ Ambient dungeon sounds
-- [ ] ⏳ UI interaction sounds
-- [ ] ⏳ Door opening/closing
-- [ ] ⏳ Chest opening
-
-### 17.2 Music
-
-- [ ] ⏳ Main menu theme
-- [ ] ⏳ Surface exploration music
-- [ ] ⏳ Town/village music
-- [ ] ⏳ Dungeon exploration tracks (by type)
-- [ ] ⏳ Combat music
-- [ ] ⏳ Boss battle music
-- [ ] ⏳ Victory/level up fanfare
-- [ ] ⏳ Ambient tracks for different biomes
-
-### 17.3 Audio Systems
-
-- [ ] ⏳ 3D positional audio
-- [ ] ⏳ Volume controls (master, music, SFX, ambient)
-- [ ] ⏳ Audio occlusion (muffle through walls)
-- [ ] ⏳ Music transitions and layering
+**Goal:** Resume from saved worlds
 
 ---
 
-## Phase 18: Polish & Optimization
+### 6.4 Multiple World Support
+- [ ] ⏳ World selection screen
+- [ ] ⏳ Create new world
+- [ ] ⏳ Delete world
+- [ ] ⏳ World preview/metadata display
 
-### 18.1 Performance Optimization
-
-- [ ] ⏳ Profile and optimize chunk generation
-- [ ] ⏳ Optimize mesh building (greedy meshing)
-- [ ] ⏳ LOD (Level of Detail) for distant chunks
-- [ ] ⏳ Frustum culling
-- [ ] ⏳ Occlusion culling
-- [ ] ⏳ Optimize lighting calculations
-- [ ] ⏳ Memory profiling and leak fixes
-- [ ] ⏳ Reduce draw calls
-- [ ] ⏳ Optimize AI pathfinding
-- [ ] ⏳ Thread pool management
-
-### 18.2 Graphics Polish
-
-- [ ] ⏳ Particle effects (magic, impacts, weather)
-- [ ] ⏳ Weather system (rain, snow, fog)
-- [ ] ⏳ Water shader improvements
-- [ ] ⏳ Skybox variations
-- [ ] ⏳ Post-processing effects (bloom, ambient occlusion)
-- [ ] ⏳ Animation polish
-- [ ] ⏳ Visual feedback improvements
-
-### 18.3 UI/UX Polish
-
-- [ ] ⏳ Consistent UI aesthetic
-- [ ] ⏳ Tooltips everywhere
-- [ ] ⏳ Keybinding customization
-- [ ] ⏳ Accessibility options (colorblind modes, text size)
-- [ ] ⏳ Tutorial/help system
-- [ ] ⏳ Loading screens with tips
-- [ ] ⏳ Smooth transitions between menus
-
-### 18.4 Bug Fixes
-
-- [ ] 🐛 Fix current face rendering bug
-- [ ] ⏳ Collision detection edge cases
-- [ ] ⏳ Save/load edge cases
-- [ ] ⏳ AI pathfinding edge cases
-- [ ] ⏳ Multiplayer sync issues (if applicable)
-- [ ] ⏳ Item duplication exploits
-- [ ] ⏳ Terrain generation artifacts
+**Goal:** Manage multiple save files
 
 ---
 
-## Phase 19: Content Expansion
-
-### 19.1 More Items
-
-- [ ] ⏳ 50+ unique weapons
-- [ ] ⏳ 50+ armor pieces
-- [ ] ⏳ 30+ spells
-- [ ] ⏳ 20+ potions
-- [ ] ⏳ Unique/legendary items
-- [ ] ⏳ Artifact items (special powers)
-
-### 19.2 More Enemies
-
-- [ ] ⏳ 30+ enemy types total
-- [ ] ⏳ 10+ boss variations
-- [ ] ⏳ Rare enemy spawns
-
-### 19.3 More Dungeons
-
-- [ ] ⏳ Unique hand-crafted dungeons
-- [ ] ⏳ Mega-dungeons (large, multi-level)
-- [ ] ⏳ Themed dungeon sets
-
-### 19.4 More Biomes
-
-- [ ] ⏳ Jungle biome
-- [ ] ⏳ Swamp biome
-- [ ] ⏳ Tundra/snow biome
-- [ ] ⏳ Volcanic biome
-- [ ] ⏳ Mushroom biome
-- [ ] ⏳ Floating islands
+### 🎯 Milestone 6: Persistent Worlds
+**Success Criteria:**
+- ✅ Modified chunks save to disk
+- ✅ World loads from disk on restart
+- ✅ Seed-based generation consistent
+- ✅ Multiple worlds supported
+- ✅ Compression keeps file sizes small
 
 ---
 
-## Phase 20: Advanced Features (Post-Launch)
+## Phase 7: Multiplayer Foundation
 
-### 20.1 Modding Support
+### 7.1 Network Architecture
+- [ ] 💎 Client-server architecture (Godot ENet)
+- [ ] 💎 Server-authoritative voxel modifications
+- [ ] 💎 Client prediction for block changes
+- [ ] ⏳ Host & Play mode (peer acts as server)
+- [ ] ⏳ Dedicated server option
+- [ ] ⏳ LAN discovery
 
-- [ ] ⏳ Mod loading system
-- [ ] ⏳ Server-side mod support
-- [ ] ⏳ Custom item support
-- [ ] ⏳ Custom enemy support
-- [ ] ⏳ Custom spell support
-- [ ] ⏳ Custom dungeon support
-- [ ] ⏳ Custom biome support
-- [ ] ⏳ Modding API documentation
-- [ ] ⏳ Modding tools
-
-### 20.2 Advanced Magic
-
-- [ ] ⏳ Spell crafting system
-- [ ] ⏳ Combine spell effects
-- [ ] ⏳ Custom spell naming
-- [ ] ⏳ Spell research mechanic
-- [ ] ⏳ Spell experimentation (risk/reward)
-
-### 20.3 Player Housing
-
-- [ ] ⏳ Purchasable houses in towns
-- [ ] ⏳ House customization (furniture, decorations)
-- [ ] ⏳ Expanded storage chests
-- [ ] ⏳ Decoration placement system
-- [ ] ⏳ Trophy displays (boss kills, achievements)
-- [ ] ⏳ House upgrades
-
-### 20.4 Advanced NPCs
-
-- [ ] ⏳ Companion system (follower NPCs)
-- [ ] ⏳ Faction reputation system
-- [ ] ⏳ NPC relationships and friendships
-- [ ] ⏳ Marriage system (optional)
-- [ ] ⏳ NPC complex daily schedules
-- [ ] ⏳ Dynamic NPC reactions to world events
-
-### 20.5 Additional Gameplay Features
-
-- [ ] ⏳ Farming system (crops influenced by seasons)
-- [ ] ⏳ Animal husbandry (breeding, raising livestock)
-- [ ] ⏳ Fishing system
-- [ ] ⏳ Cooking system
-- [ ] ⏳ Ocean/underwater content (boats, diving, sea creatures)
-- [ ] ⏳ Boss raid instances (multiplayer)
-- [ ] ⏳ PvP arenas (server configurable)
-- [ ] ⏳ World events (festivals, invasions, meteor showers)
-- [ ] ⏳ Proximity voice chat
+**Goal:** Solid multiplayer foundation
 
 ---
 
-## Current Priority Tasks (Next Sprint)
+### 7.2 Chunk Synchronization
+- [ ] 💎 Server sends chunk data to clients
+- [ ] 💎 Compress chunk data for network transfer
+- [ ] 💎 Stream chunks on player join
+- [ ] ⏳ Delta updates (only send changes)
+- [ ] ⏳ Chunk request prioritization
 
-### Immediate Priorities (Phase 1 & 2)
-1. **Fix face rendering issues** - High priority bug (Phase 1)
-2. **Implement texture atlas system** - Foundation for swappable textures (Phase 2)
-3. **Create default texture atlas** - Vanilla textures (Phase 2)
-4. **Resource pack loader** - JSON-based UV mapping (Phase 2)
-
-### Early Gameplay (Phase 3 & 6)
-5. **Day/night cycle** - Time progression system (Phase 3)
-6. **Basic weather** - Rain and clear weather (Phase 3)
-7. **Design and implement Daggerfall-style HUD** - With time/season/weather display (Phase 6)
-8. **Character stats system** - Foundation for RPG mechanics (Phase 6)
-
-### Core Loop (Phase 7)
-9. **Implement basic mining and block placement** - Core gameplay loop
-10. **Create inventory system** - Essential for item management
-11. **Simple crafting** - Basic recipes
-
-### Multiplayer Foundation (Phase 4)
-12. **Basic networking** - Client-server architecture
-13. **Player synchronization** - Position and block changes
-14. **Text chat** - Communication system
+**Goal:** Smooth chunk streaming to clients
 
 ---
 
-## Milestone Goals
+### 7.3 Block Modification Sync
+- [ ] 💎 Client sends block change request to server
+- [ ] 💎 Server validates and applies change
+- [ ] 💎 Server broadcasts change to all clients
+- [ ] ⏳ Client-side prediction with rollback
+- [ ] ⏳ Conflict resolution
 
-### Milestone 1: Living World Foundation
-- ✅ Voxel terrain working
-- ⏳ Texture atlas system (swappable textures)
-- ⏳ Day/night cycle functional
-- ⏳ Weather system (rain, snow, clear)
-- ⏳ Seasonal system working
-- ⏳ Basic biome generation (plains, forest, desert, mountain)
-- ⏳ Time/season/weather display on HUD
-
-**Target:** Establish living, breathing world with dynamic systems
-
-### Milestone 2: Multiplayer Core
-- ⏳ Client-server networking functional
-- ⏳ Player synchronization working
-- ⏳ Block place/break synced across players
-- ⏳ Text chat system
-- ⏳ Server browser
-- ⏳ 2-4 players stable
-- ⏳ Time/weather synced across clients
-
-**Target:** Stable multiplayer foundation for co-op play
-
-### Milestone 3: Overworld Exploration
-- ⏳ Multiple biomes generating
-- ⏳ Village generation working
-- ⏳ Dungeon entrances scattered in world
-- ⏳ Natural structures (caves, ravines, ruins)
-- ⏳ World persistence (save/load)
-- ⏳ Fast travel system
-
-**Target:** Rich explorable overworld with points of interest
-
-### Milestone 4: RPG Systems & Building
-- ⏳ Character stats and skills
-- ⏳ Inventory and equipment
-- ⏳ Mining and building functional
-- ⏳ Crafting system (basic recipes)
-- ⏳ Daggerfall-style HUD with all displays
-- ⏳ Menu interfaces (character, inventory, crafting)
-
-**Target:** Core RPG mechanics and building gameplay
-
-### Milestone 5: Combat & Dungeons
-- ⏳ Melee, ranged, and magic combat
-- ⏳ 10+ enemy types with AI
-- ⏳ Dungeon generation (instanced)
-- ⏳ 3+ dungeon types
-- ⏳ Boss enemies
-- ⏳ Loot system
-- ⏳ Multiplayer dungeon raiding
-
-**Target:** Engaging combat and dungeon crawling
-
-### Milestone 6: NPCs & Content
-- ⏳ NPC system with dialogue
-- ⏳ Merchants and trading
-- ⏳ Quest system
-- ⏳ Towns with NPCs
-- ⏳ Guild halls
-- ⏳ 30+ enemies, 50+ items, 20+ spells
-
-**Target:** Populated world with RPG depth
-
-### Milestone 7: Polish & Launch
-- ⏳ Performance optimized (60 FPS target)
-- ⏳ Audio and music complete
-- ⏳ UI polished
-- ⏳ Tutorial system
-- ⏳ Server administration tools
-- ⏳ Resource pack support complete
-
-**Target:** Polished 1.0 release ready for players
+**Goal:** Synchronized building/mining
 
 ---
 
-## Notes
+### 7.4 Player Synchronization
+- [ ] 💎 Player position/rotation sync
+- [ ] 💎 Player animation sync
+- [ ] ⏳ Interpolation for smooth movement
+- [ ] ⏳ Lag compensation
+- [ ] ⏳ Player name tags
 
-- **Multiplayer First:** Design all systems with multiplayer in mind from the start
-- **Living World:** Prioritize dynamic systems (seasons, weather, time) for immersive experience
-- **Texture Atlas Early:** Get resource pack system working early for modding community
-- **Iterate on Feel:** Combat, mining, and building should feel satisfying before moving to complex systems
-- **Daggerfall Aesthetic:** Keep the UI design true to Daggerfall's look and feel
-- **Performance First:** Don't add features at the cost of performance, especially for multiplayer
-- **Test Frequently:** Playtest each system thoroughly, both solo and multiplayer
-- **Community Feedback:** Once alpha is playable, gather feedback to guide priorities
-- **Server Stability:** Network code must be robust and cheat-resistant
+**Goal:** See other players in world
+
+---
+
+### 7.5 Server Administration
+- [ ] ⏳ Server config file
+- [ ] ⏳ Whitelist/blacklist
+- [ ] ⏳ Operator permissions
+- [ ] ⏳ Kick/ban commands
+- [ ] ⏳ Server logging
+
+**Goal:** Manageable multiplayer servers
+
+---
+
+### 🎯 Milestone 7: Multiplayer Works
+**Success Criteria:**
+- ✅ 2-4 players can join same world
+- ✅ Chunks stream to clients
+- ✅ Block changes sync across clients
+- ✅ Players see each other
+- ✅ Stable, no desyncs
+- ✅ <100ms latency feels good
+
+---
+
+## Phase 8: Lighting System
+
+### 8.1 Sunlight Propagation
+- [ ] ⏳ Top-down sunlight flood fill
+- [ ] ⏳ Sunlight attenuation through transparent blocks
+- [ ] ⏳ Cave darkness
+- [ ] ⏳ Store light values per voxel
+
+**Goal:** Natural outdoor lighting
+
+---
+
+### 8.2 Block Light Sources
+- [ ] ⏳ Light-emitting blocks (torch, lava, glowstone)
+- [ ] ⏳ Light propagation algorithm (BFS/flood fill)
+- [ ] ⏳ Colored lighting support
+- [ ] ⏳ Light values affect rendering
+
+**Goal:** Torches and dynamic lighting
+
+---
+
+### 8.3 Smooth Lighting
+- [ ] ⏳ Ambient occlusion (AO) calculation
+- [ ] ⏳ Vertex lighting (interpolate between voxels)
+- [ ] ⏳ Smooth transitions between light levels
+
+**Goal:** Beautiful, smooth lighting
+
+---
+
+### 8.4 Day/Night Cycle Integration
+- [ ] ⏳ Sunlight intensity varies by time of day
+- [ ] ⏳ Re-light chunks when time changes
+- [ ] ⏳ Moon provides dim light at night
+
+**Goal:** Dynamic lighting from day/night cycle
+
+---
+
+### 🎯 Milestone 8: Advanced Lighting
+**Success Criteria:**
+- ✅ Sunlight propagates naturally
+- ✅ Torches provide light
+- ✅ Smooth, beautiful lighting
+- ✅ Caves are dark (need torches)
+- ✅ Day/night affects world lighting
+
+---
+
+## Phase 9: LOD & Advanced Optimization
+
+### 9.1 Level of Detail (LOD)
+- [ ] ⏳ Generate lower-poly meshes for distant chunks
+- [ ] ⏳ LOD switching based on distance
+- [ ] ⏳ Smooth LOD transitions (avoid popping)
+- [ ] ⏳ Configurable LOD levels
+
+**Goal:** Render distance 32+ without FPS drop
+
+---
+
+### 9.2 Occlusion Culling
+- [ ] ⏳ Detect fully-occluded chunks (surrounded by solid chunks)
+- [ ] ⏳ Skip rendering occluded chunks
+- [ ] ⏳ Dynamic occlusion based on camera
+
+**Goal:** Don't render what player can't see
+
+---
+
+### 9.3 Mesh Streaming
+- [ ] ⏳ Progressive mesh loading (low detail → high detail)
+- [ ] ⏳ Async mesh uploads to GPU
+- [ ] ⏳ Mesh caching
+
+**Goal:** Instant chunk appearance, detail loads in
+
+---
+
+### 🎯 Milestone 9: Maximum Performance
+**Success Criteria:**
+- ✅ Render distance 32 at 60 FPS
+- ✅ LOD system working smoothly
+- ✅ Occlusion culling saves GPU time
+- ✅ Can handle massive worlds
+
+---
+
+## Phase 10: Polish & Quality of Life
+
+### 10.1 Visual Polish
+- [ ] ⏳ Block break animations
+- [ ] ⏳ Block place animations
+- [ ] ⏳ Particle effects (dust, sparks)
+- [ ] ⏳ Water shader (transparency, reflections)
+- [ ] ⏳ Grass/foliage waving animation
+
+**Goal:** Visually appealing, polished look
+
+---
+
+### 10.2 Audio
+- [ ] ⏳ Block break sounds (varies by type)
+- [ ] ⏳ Block place sounds
+- [ ] ⏳ Footstep sounds (varies by surface)
+- [ ] ⏳ Ambient cave sounds
+
+**Goal:** Audio feedback for actions
+
+---
+
+### 10.3 Debug Tools
+- [ ] ⏳ Chunk boundary visualization
+- [ ] ⏳ Performance overlay (FPS, chunk count, memory)
+- [ ] ⏳ Wireframe mode
+- [ ] ⏳ Lighting debug view
+- [ ] ⏳ Console commands
+
+**Goal:** Easy debugging and profiling
+
+---
+
+### 🎯 Milestone 10: Production Ready
+**Success Criteria:**
+- ✅ Visually polished
+- ✅ Audio feedback
+- ✅ Debug tools available
+- ✅ No known bugs
+- ✅ Ready for game integration
+
+---
+
+## Integration with Game Systems
+
+### RPG Systems (After Voxel Engine Complete)
+- [ ] ⏳ Block hardness → mining skill interaction
+- [ ] ⏳ Tool effectiveness system
+- [ ] ⏳ Block drops (stone → cobblestone + XP)
+- [ ] ⏳ Mining skill progression
+
+### Farming Systems
+- [ ] ⏳ Tilled soil block type
+- [ ] ⏳ Crop blocks (growth stages)
+- [ ] ⏳ Irrigation detection (water nearby)
+- [ ] ⏳ Season-based crop behavior
+
+### Combat Systems
+- [ ] ⏳ Voxel destruction from explosions
+- [ ] ⏳ Line-of-sight raycasting through voxels
+- [ ] ⏳ Cover detection (AI uses voxel data)
+
+### Building Systems
+- [ ] ⏳ Multiblock structures (doors, beds, chests)
+- [ ] ⏳ Furniture blocks
+- [ ] ⏳ Rotation for directional blocks
+- [ ] ⏳ Building templates
+
+---
+
+## Known Issues & Risks
+
+### Current Known Issues
+- [ ] 🐛 None yet - fresh start!
+
+### Technical Risks
+- ⚠️ **Greedy meshing complexity** - Algorithm is complex, may take multiple attempts
+- ⚠️ **Threading bugs** - Race conditions, deadlocks possible
+- ⚠️ **Network synchronization** - Multiplayer is hard, expect challenges
+- ⚠️ **Performance on low-end hardware** - May need additional optimization
+
+### Mitigation Strategies
+- ✅ Implement features incrementally (naive first, optimize later)
+- ✅ Comprehensive testing at each milestone
+- ✅ Reference proven implementations (Voxel-Core, godot_voxel)
+- ✅ Profile early and often
+
+---
+
+## Performance Targets
+
+### Minimum Specs (Target)
+- **CPU:** Dual-core 2.5 GHz
+- **RAM:** 4 GB
+- **GPU:** Integrated graphics
+- **Target:** 30 FPS at render distance 6
+
+### Recommended Specs (Target)
+- **CPU:** Quad-core 3.0 GHz
+- **RAM:** 8 GB
+- **GPU:** Dedicated (2GB VRAM)
+- **Target:** 60 FPS at render distance 12
+
+### High-End Specs (Target)
+- **CPU:** 6+ cores 3.5 GHz
+- **RAM:** 16 GB
+- **GPU:** Modern (4GB+ VRAM)
+- **Target:** 60 FPS at render distance 24+
 
 ---
 
 ## Resources & References
 
-- **Daggerfall Unity:** For UI/UX inspiration and RPG mechanics
-- **Minecraft Beta 1.7:** For texture atlas system reference
-- **Minecraft:** For voxel mechanics, world generation, and feel
-- **Godot 4.x Networking:** Built-in multiplayer support
-- **Godot Voxel Tools:** Community resources for voxel rendering
-- **Game Design Document:** See `project_management/game_design_document.md` for detailed design
-- **ENet/WebRTC:** Potential networking libraries for multiplayer
+### Documentation
+- `VOXEL_ENGINE_PLAN.md` - Detailed architecture plan
+- `project_management/game_design_document.md` - Overall game design
+
+### External References
+- **Zylann/godot_voxel** - Professional C++ voxel module
+- **ClarkThyLord/Voxel-Core** - GDScript voxel plugin with greedy meshing
+- **0fps.net** - Greedy meshing article (classic reference)
+- **Godot Docs** - Threading, networking, optimization guides
+
+### Tools
+- Godot Profiler (CPU, memory)
+- RenderDoc (GPU profiling)
+- Git (version control)
+
+---
+
+## Current Sprint Tasks (Next 1-2 Weeks)
+
+### Week 1: Core Foundation
+1. 🔥 Create VoxelData class (PackedByteArray storage)
+2. 🔥 Create Chunk class with pooling
+3. 🔥 Create VoxelTypes registry
+4. 🔥 Create ChunkManager skeleton
+5. 🔥 Create basic ChunkMeshBuilder (naive culling)
+6. 🔥 Create TerrainGenerator (simple height-based)
+7. 🔥 Create VoxelWorld main controller
+8. 🔥 **Test:** Can generate and render basic terrain
+
+### Week 2: Refinement
+1. 🔥 Implement chunk pooling
+2. 🔥 Implement cross-chunk face culling
+3. 🔥 Add collision meshes
+4. 🔥 Add texture atlas support (prepare UVs)
+5. 🔥 Performance profiling and optimization
+6. 🔥 **Test:** 60 FPS at render distance 8
+
+### Success Criteria for Sprint
+- ✅ Can walk on generated voxel terrain
+- ✅ Chunks load/unload based on player position
+- ✅ No face rendering bugs
+- ✅ 60 FPS target hit
+- ✅ Clean, documented code
+
+---
+
+## Notes & Lessons Learned
+
+### Design Decisions
+- **Chunk Size:** 16x16x16 (industry standard, good balance)
+- **Storage:** PackedByteArray (minimal memory, fast access)
+- **Meshing:** Naive first, greedy second (incremental complexity)
+- **Threading:** Worker pool (avoid thread creation overhead)
+- **Materials:** Single atlas (minimize draw calls)
+
+### Best Practices
+- ✅ Profile early and often
+- ✅ Unit test core algorithms
+- ✅ Document complex code
+- ✅ Commit working code frequently
+- ✅ Test on lower-end hardware
 
 ---
 
 **Last Updated:** 2025-11-07
-**Project Scope:** Multiplayer voxel RPG (Minecraft + Daggerfall + Dynamic World)
-**Current Phase:** Phase 1 Complete → Phase 2 (Texture Atlas) & Phase 3 (Dynamic Systems) Next
-**Next Review:** After Milestone 1 completion (Living World Foundation)
+**Current Phase:** Phase 1 - Core Voxel Engine (Foundation)
+**Next Milestone:** Walkable Terrain
+**Status:** 🚀 Ready to start implementation!
