@@ -54,7 +54,7 @@ func build_mesh(chunk: Chunk) -> MeshInstance3D:
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 
 	var solid_voxels := 0
-	var faces_added := 0
+	var vertices_added := 0
 
 	# Iterate through all voxels in the chunk
 	for x in range(VoxelData.CHUNK_SIZE):
@@ -73,18 +73,15 @@ func build_mesh(chunk: Chunk) -> MeshInstance3D:
 				if VoxelTypes.is_transparent(voxel_type):
 					continue
 
-				# Add visible faces
-				var faces_before: int = st.get_num_draw_vertices() / 6
-				_add_voxel_faces(st, chunk, local_pos, voxel_type)
-				var new_faces: int = (st.get_num_draw_vertices() / 6) - faces_before
-				faces_added += new_faces
+				# Add visible faces (returns number of vertices added)
+				var verts := _add_voxel_faces(st, chunk, local_pos, voxel_type)
+				vertices_added += verts
 
 	print("[MeshBuilder]   Processed %d solid voxels" % solid_voxels)
-	print("[MeshBuilder]   Added %d faces" % faces_added)
-	print("[MeshBuilder]   Total vertices: %d" % st.get_num_draw_vertices())
+	print("[MeshBuilder]   Added %d vertices (%d triangles)" % [vertices_added, vertices_added / 3])
 
 	# Check if we have any geometry
-	if st.get_num_draw_vertices() == 0:
+	if vertices_added == 0:
 		print("[MeshBuilder] No vertices to mesh, returning null")
 		return null
 
@@ -104,27 +101,37 @@ func build_mesh(chunk: Chunk) -> MeshInstance3D:
 	return mesh_instance
 
 ## Add visible faces for a single voxel
-func _add_voxel_faces(st: SurfaceTool, chunk: Chunk, local_pos: Vector3i, voxel_type: int) -> void:
+## Returns the number of vertices added (6 per face)
+func _add_voxel_faces(st: SurfaceTool, chunk: Chunk, local_pos: Vector3i, voxel_type: int) -> int:
 	var world_pos := local_pos * VOXEL_SIZE
+	var vertices_added := 0
 
-	# Check each face direction
+	# Check each face direction (each face adds 6 vertices)
 	if _should_add_face(chunk, local_pos, Vector3i.UP):
 		_add_top_face(st, world_pos, voxel_type)
+		vertices_added += 6
 
 	if _should_add_face(chunk, local_pos, Vector3i.DOWN):
 		_add_bottom_face(st, world_pos, voxel_type)
+		vertices_added += 6
 
 	if _should_add_face(chunk, local_pos, Vector3i.FORWARD):
 		_add_north_face(st, world_pos, voxel_type)
+		vertices_added += 6
 
 	if _should_add_face(chunk, local_pos, Vector3i.BACK):
 		_add_south_face(st, world_pos, voxel_type)
+		vertices_added += 6
 
 	if _should_add_face(chunk, local_pos, Vector3i.RIGHT):
 		_add_east_face(st, world_pos, voxel_type)
+		vertices_added += 6
 
 	if _should_add_face(chunk, local_pos, Vector3i.LEFT):
 		_add_west_face(st, world_pos, voxel_type)
+		vertices_added += 6
+
+	return vertices_added
 
 ## Determine if a face should be added (face culling logic)
 ## Checks both within chunk and across chunk boundaries
