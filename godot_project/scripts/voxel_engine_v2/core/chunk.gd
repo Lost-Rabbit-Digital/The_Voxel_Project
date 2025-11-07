@@ -167,7 +167,7 @@ func serialize() -> Dictionary:
 ## Deserialize chunk data from save
 static func deserialize(data: Dictionary) -> Chunk:
 	var chunk := Chunk.new()
-	var pos := data.get("position", {"x": 0, "y": 0, "z": 0})
+	var pos: Dictionary = data.get("position", {"x": 0, "y": 0, "z": 0})
 	chunk.position = Vector3i(pos.x, pos.y, pos.z)
 
 	var voxel_bytes: PackedByteArray = data.get("voxel_data", PackedByteArray())
@@ -185,7 +185,7 @@ func get_memory_usage() -> int:
 
 ## Debug: Print chunk info
 func print_info() -> void:
-	var state_name := State.keys()[state]
+	var state_name: String = State.keys()[state]
 	print("Chunk %s [%s]: %d voxels, dirty=%s, neighbors=%d" % [
 		position,
 		state_name,
