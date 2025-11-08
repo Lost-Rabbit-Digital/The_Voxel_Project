@@ -703,6 +703,7 @@ func _process_load_queue() -> void:
 
 ## Calculate priority for a chunk based on distance and camera direction
 ## Higher priority = should be loaded sooner
+## Sodium-inspired: Aggressively prioritize visible chunks in camera view
 func _calculate_chunk_priority(chunk_pos: Vector3i, player_position: Vector3, camera_forward: Vector3) -> float:
 	# Get chunk center in world space
 	var chunk_world_pos := Vector3(chunk_pos * VoxelData.CHUNK_SIZE) + Vector3.ONE * (VoxelData.CHUNK_SIZE * 0.5)
@@ -717,12 +718,25 @@ func _calculate_chunk_priority(chunk_pos: Vector3i, player_position: Vector3, ca
 	# Calculate dot product with camera forward (1.0 = directly ahead, -1.0 = directly behind)
 	var direction_alignment := camera_forward.dot(to_chunk)
 
-	# Boost priority for chunks in front of camera
-	var direction_priority: float = max(direction_alignment, 0.0)  # 0.0 to 1.0
+	# SODIUM OPTIMIZATION: More aggressive directional prioritization
+	# Chunks in front of camera get MUCH higher priority
+	# Chunks behind camera get heavily penalized
+	var direction_priority: float = 0.0
+	if direction_alignment > 0.5:
+		# Directly in view: exponential boost (Sodium technique)
+		direction_priority = pow(direction_alignment, 0.5) * 2.0  # 1.4 to 2.0
+	elif direction_alignment > 0.0:
+		# Peripheral vision: moderate boost
+		direction_priority = direction_alignment * 0.5  # 0.0 to 0.25
+	else:
+		# Behind camera: heavy penalty
+		direction_priority = direction_alignment * 0.1  # -0.1 to 0.0
 
 	# Combined priority (weighted sum)
-	# Distance is more important (weight 2.0), direction is secondary (weight 1.0)
-	var priority: float = (distance_priority * 2.0) + (direction_priority * 1.0)
+	# SODIUM OPTIMIZATION: Direction is now MORE important than distance
+	# This makes chunks in view load FIRST, even if farther away
+	# Distance weight: 1.5, Direction weight: 3.0 (2x more important)
+	var priority: float = (distance_priority * 1.5) + (direction_priority * 3.0)
 
 	return priority
 
@@ -1489,9 +1503,9 @@ func _process_pending_mesh_creations() -> void:
 			region.mesh_instance.queue_free()
 			region.mesh_instance = null
 
-		# Create ArrayMesh
+		# Create ArrayMesh with compression (Sodium-inspired optimization)
 		var array_mesh := ArrayMesh.new()
-		array_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, combined_arrays)
+		array_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, combined_arrays, [], {}, Mesh.ARRAY_COMPRESS_DEFAULT)
 
 		# Create MeshInstance3D
 		region.mesh_instance = MeshInstance3D.new()

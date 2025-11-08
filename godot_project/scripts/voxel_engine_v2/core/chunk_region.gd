@@ -196,9 +196,9 @@ func rebuild_combined_mesh(mesh_builder) -> void:
 	if not indices.is_empty():
 		combined_arrays[Mesh.ARRAY_INDEX] = indices
 
-	# Create ArrayMesh
+	# Create ArrayMesh with compression (Sodium-inspired optimization)
 	var array_mesh := ArrayMesh.new()
-	array_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, combined_arrays)
+	array_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, combined_arrays, [], {}, Mesh.ARRAY_COMPRESS_DEFAULT)
 
 	# Create MeshInstance3D
 	mesh_instance = MeshInstance3D.new()
