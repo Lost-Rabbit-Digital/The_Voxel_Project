@@ -169,6 +169,14 @@ func load_chunk(chunk_pos: Vector3i) -> Chunk:
 		_return_chunk_to_pool(chunk)
 		return null
 
+	# Add to active chunks first (before neighbor updates)
+	active_chunks[chunk_pos] = chunk
+
+	# Update neighbor references BEFORE building mesh
+	# This allows proper face culling at chunk boundaries
+	print("[ChunkManager]   Updating neighbor references...")
+	_update_chunk_neighbors(chunk_pos, chunk)
+
 	# Generate mesh
 	chunk.state = Chunk.State.MESHING
 	if mesh_builder:
@@ -186,13 +194,12 @@ func load_chunk(chunk_pos: Vector3i) -> Chunk:
 	else:
 		print("[ChunkManager]   WARNING: No mesh builder available")
 
-	# Update neighbor references
-	print("[ChunkManager]   Updating neighbor references...")
-	_update_chunk_neighbors(chunk_pos, chunk)
+	# Rebuild meshes of neighboring chunks (they now have a new neighbor)
+	print("[ChunkManager]   Rebuilding neighboring chunk meshes...")
+	_rebuild_neighbor_meshes(chunk_pos)
 
 	# Activate chunk
 	chunk.state = Chunk.State.ACTIVE
-	active_chunks[chunk_pos] = chunk
 
 	print("[ChunkManager] ✓ Chunk %s loaded successfully" % chunk_pos)
 	return chunk
@@ -216,6 +223,9 @@ func unload_chunk(chunk_pos: Vector3i) -> void:
 
 	# Remove from active chunks
 	active_chunks.erase(chunk_pos)
+
+	# Rebuild neighboring chunks (they may need to show faces that were previously culled)
+	_rebuild_neighbor_meshes(chunk_pos)
 
 	# Return to pool
 	_return_chunk_to_pool(chunk)
@@ -300,6 +310,49 @@ func _clear_chunk_neighbors(chunk_pos: Vector3i) -> void:
 		if neighbor_pos in active_chunks:
 			var neighbor: Chunk = active_chunks[neighbor_pos]
 			neighbor.set_neighbor(opposite[direction], null)
+
+## Rebuild meshes of neighboring chunks
+## Called when a new chunk is loaded to ensure proper face culling at boundaries
+func _rebuild_neighbor_meshes(chunk_pos: Vector3i) -> void:
+	var neighbor_offsets := {
+		"north": Vector3i(0, 0, 1),
+		"south": Vector3i(0, 0, -1),
+		"east": Vector3i(1, 0, 0),
+		"west": Vector3i(-1, 0, 0),
+		"up": Vector3i(0, 1, 0),
+		"down": Vector3i(0, -1, 0)
+	}
+
+	for direction in neighbor_offsets.keys():
+		var neighbor_pos: Vector3i = chunk_pos + neighbor_offsets[direction]
+		if neighbor_pos in active_chunks:
+			var neighbor: Chunk = active_chunks[neighbor_pos]
+			if neighbor and neighbor.state == Chunk.State.ACTIVE:
+				print("[ChunkManager]     Rebuilding mesh for neighbor at %s..." % neighbor_pos)
+				_rebuild_chunk_mesh(neighbor)
+
+## Rebuild a single chunk's mesh
+func _rebuild_chunk_mesh(chunk: Chunk) -> void:
+	if not chunk or not mesh_builder:
+		return
+
+	# Remove old mesh instance if it exists
+	if chunk.mesh_instance:
+		remove_child(chunk.mesh_instance)
+		chunk.mesh_instance.queue_free()
+		chunk.mesh_instance = null
+
+	# Build new mesh
+	chunk.state = Chunk.State.MESHING
+	var mesh_instance: MeshInstance3D = mesh_builder.build_mesh(chunk)
+	if mesh_instance:
+		chunk.mesh_instance = mesh_instance
+		mesh_instance.position = chunk.get_world_position()
+		add_child(mesh_instance)
+
+	# Restore active state
+	chunk.state = Chunk.State.ACTIVE
+	chunk.mark_clean()
 
 ## Get chunk at a specific chunk position
 func get_chunk(chunk_pos: Vector3i) -> Chunk:
