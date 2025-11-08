@@ -16,6 +16,7 @@ glow_enabled = true
 [node name="VoxelWorld" type="Node3D" parent="."]
 script = ExtResource("1_voxel_world")
 world_seed = 12345
+enable_threading = true
 player_node_path = NodePath("../TestCamera")
 
 [node name="TestCamera" type="Camera3D" parent="."]

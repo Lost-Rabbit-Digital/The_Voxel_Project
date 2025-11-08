@@ -48,6 +48,10 @@ func _ready() -> void:
 	print("  - enable_auto_generation: %s" % enable_auto_generation)
 	print("  - enable_chunk_pooling: %s" % enable_chunk_pooling)
 	print("  - chunk_pool_size: %d" % chunk_pool_size)
+	if enable_threading:
+		print("  - enable_threading: TRUE ✓ (4 worker threads)")
+	else:
+		print("  - enable_threading: FALSE ⚠️ (SLOW - WILL FREEZE!)")
 	print("========================================")
 
 	# Report loading progress if LoadingManager exists
