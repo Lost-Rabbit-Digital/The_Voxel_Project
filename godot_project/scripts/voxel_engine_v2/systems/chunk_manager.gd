@@ -234,8 +234,13 @@ func _on_meshing_completed(job) -> void:
 	# Activate chunk
 	chunk.state = Chunk.State.ACTIVE
 
-	# Rebuild neighbor meshes to remove faces that are now hidden by this chunk
-	_rebuild_neighbor_meshes(chunk_pos)
+	# Only rebuild neighbors if this was a new chunk load, not a neighbor rebuild
+	var is_rebuild := chunk.get_meta("is_rebuild", false)
+	if not is_rebuild:
+		_rebuild_neighbor_meshes(chunk_pos)
+	else:
+		# Clear the rebuild flag
+		chunk.remove_meta("is_rebuild")
 
 ## Tracked position for priority calculations (set by update_chunks)
 var tracked_position: Vector3 = Vector3.ZERO
@@ -702,8 +707,10 @@ func _rebuild_chunk_mesh(chunk: Chunk) -> void:
 	chunk.state = Chunk.State.MESHING
 
 	if thread_pool:
-		# Queue threaded mesh rebuild
+		# Queue threaded mesh rebuild (mark as rebuild to prevent cascading)
 		meshing_chunks[chunk.position] = chunk
+		# Store a flag in the chunk to indicate this is a rebuild, not initial load
+		chunk.set_meta("is_rebuild", true)
 		var priority: float = 1.0 / max(tracked_position.distance_to(chunk.get_world_position()), 1.0)
 		thread_pool.queue_meshing_job(chunk, mesh_builder, priority)
 	else:
