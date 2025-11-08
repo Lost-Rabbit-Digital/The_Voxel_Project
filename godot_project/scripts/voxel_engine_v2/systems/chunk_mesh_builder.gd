@@ -30,7 +30,8 @@ func _init(manager: ChunkManager = null) -> void:
 ## Create a simple default material for testing
 func _create_default_material() -> void:
 	default_material = StandardMaterial3D.new()
-	default_material.albedo_color = Color(0.7, 0.7, 0.7)
+	default_material.albedo_color = Color(1.0, 1.0, 1.0)  # White base for vertex colors
+	default_material.vertex_color_use_as_albedo = true  # CRITICAL: Use vertex colors!
 	default_material.roughness = 1.0
 	default_material.cull_mode = BaseMaterial3D.CULL_BACK
 
