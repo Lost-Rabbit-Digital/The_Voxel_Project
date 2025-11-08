@@ -1,11 +1,22 @@
 [configuration]
 entry_symbol = "voxel_engine_library_init"
 compatibility_minimum = "4.3"
+reloadable = true
 
 [libraries]
 linux.debug.x86_64 = "res://../gdextension/bin/libvoxelengine.linux.template_debug.x86_64.so"
 linux.release.x86_64 = "res://../gdextension/bin/libvoxelengine.linux.template_release.x86_64.so"
-windows.debug.x86_64 = "res://../gdextension/bin/libvoxelengine.windows.template_debug.x86_64.dll"
-windows.release.x86_64 = "res://../gdextension/bin/libvoxelengine.windows.template_release.x86_64.dll"
-macos.debug = "res://../gdextension/bin/libvoxelengine.macos.template_debug.framework"
-macos.release = "res://../gdextension/bin/libvoxelengine.macos.template_release.framework"
+
+# Build instructions for Windows:
+# 1. Install Python 3 and SCons (pip install scons)
+# 2. Install Visual Studio 2019+ or MinGW-w64
+# 3. Open a terminal in the gdextension/ folder
+# 4. Build godot-cpp: cd godot-cpp && scons platform=windows target=template_debug
+# 5. Build extension: cd .. && scons platform=windows target=template_debug
+# 6. Uncomment the lines below after building:
+# windows.debug.x86_64 = "res://../gdextension/bin/libvoxelengine.windows.template_debug.x86_64.dll"
+# windows.release.x86_64 = "res://../gdextension/bin/libvoxelengine.windows.template_release.x86_64.dll"
+
+# Build instructions for macOS: Same as Windows but use platform=macos
+# macos.debug = "res://../gdextension/bin/libvoxelengine.macos.template_debug.framework"
+# macos.release = "res://../gdextension/bin/libvoxelengine.macos.template_release.framework"
