@@ -109,8 +109,8 @@ func _draw() -> void:
 
 	# Draw each axis line and label
 	for axis_end in all_axis_ends:
-		var end_pos := center + axis_end.vec
-		var color := axis_end.color
+		var end_pos: Vector2 = center + axis_end.vec
+		var color: Color = axis_end.color
 
 		# Make lines facing away dimmer
 		if axis_end.depth < 0:
@@ -123,8 +123,8 @@ func _draw() -> void:
 		draw_circle(end_pos, 4.0, color)
 
 		# Draw label
-		var label_pos := center + axis_end.vec.normalized() * label_distance
-		var label_color := color
+		var label_pos: Vector2 = center + axis_end.vec.normalized() * label_distance
+		var label_color: Color = color
 		label_color.a = 1.0 if axis_end.depth > 0 else 0.5
 
 		# Offset label slightly for better readability
