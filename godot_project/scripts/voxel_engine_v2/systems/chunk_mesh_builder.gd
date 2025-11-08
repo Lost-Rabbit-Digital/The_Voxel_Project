@@ -178,7 +178,7 @@ func _get_neighbor_chunk(chunk: Chunk, direction: Vector3i) -> Chunk:
 ## Get a pastel color based on y-level (height-based coloring)
 func _get_color_for_y_level(y_pos: float) -> Color:
 	# Normalize y position to 0-1 range (assuming terrain between y=0 and y=128)
-	var normalized_y := clamp(y_pos / 128.0, 0.0, 1.0)
+	var normalized_y: float = clamp(y_pos / 128.0, 0.0, 1.0)
 
 	# Create pastel gradient from bottom to top
 	# Low elevations: pastel blue-green (water/low areas)
@@ -187,15 +187,15 @@ func _get_color_for_y_level(y_pos: float) -> Color:
 
 	if normalized_y < 0.33:
 		# Bottom third: pastel aqua to mint green
-		var t := normalized_y / 0.33
+		var t: float = normalized_y / 0.33
 		return Color(0.7, 0.9, 0.85).lerp(Color(0.75, 0.95, 0.75), t)
 	elif normalized_y < 0.66:
 		# Middle third: mint green to pastel yellow
-		var t := (normalized_y - 0.33) / 0.33
+		var t: float = (normalized_y - 0.33) / 0.33
 		return Color(0.75, 0.95, 0.75).lerp(Color(0.95, 0.95, 0.7), t)
 	else:
 		# Top third: pastel yellow to pastel pink-purple
-		var t := (normalized_y - 0.66) / 0.34
+		var t: float = (normalized_y - 0.66) / 0.34
 		return Color(0.95, 0.95, 0.7).lerp(Color(0.95, 0.75, 0.9), t)
 
 ## Add a quad (two triangles) with color
