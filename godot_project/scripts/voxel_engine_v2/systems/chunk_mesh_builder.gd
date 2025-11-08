@@ -215,8 +215,9 @@ func _should_add_face(chunk: Chunk, local_pos: Vector3i, direction: Vector3i) ->
 			# Add face if neighbor is air or transparent
 			return neighbor_voxel == VoxelTypes.Type.AIR or VoxelTypes.is_transparent(neighbor_voxel)
 
-	# If neighbor chunk doesn't exist, assume it's air (render the face)
-	return true
+	# If neighbor chunk doesn't exist, assume it's solid (don't render the face)
+	# This prevents visible chunk boundary walls when underground
+	return false
 
 ## Get neighboring chunk based on direction
 func _get_neighbor_chunk(chunk: Chunk, direction: Vector3i) -> Chunk:
