@@ -149,12 +149,30 @@ func rebuild_combined_mesh(mesh_builder) -> void:
 		is_dirty = false
 		return
 
-	# Build the combined mesh
+	# Build the combined mesh - only include arrays that have proper data
 	combined_arrays[Mesh.ARRAY_VERTEX] = vertices
-	combined_arrays[Mesh.ARRAY_NORMAL] = normals
-	combined_arrays[Mesh.ARRAY_COLOR] = colors
-	combined_arrays[Mesh.ARRAY_TEX_UV] = uvs
-	combined_arrays[Mesh.ARRAY_INDEX] = indices
+
+	# Only include normals if we have them for all vertices
+	if normals.size() == vertices.size():
+		combined_arrays[Mesh.ARRAY_NORMAL] = normals
+	elif normals.size() > 0:
+		print("[ChunkRegion] Warning: Normal count (%d) doesn't match vertex count (%d)" % [normals.size(), vertices.size()])
+
+	# Only include colors if we have them for all vertices
+	if colors.size() == vertices.size():
+		combined_arrays[Mesh.ARRAY_COLOR] = colors
+	elif colors.size() > 0:
+		print("[ChunkRegion] Warning: Color count (%d) doesn't match vertex count (%d)" % [colors.size(), vertices.size()])
+
+	# Only include UVs if we have them for all vertices
+	if uvs.size() == vertices.size():
+		combined_arrays[Mesh.ARRAY_TEX_UV] = uvs
+	elif uvs.size() > 0:
+		print("[ChunkRegion] Warning: UV count (%d) doesn't match vertex count (%d)" % [uvs.size(), vertices.size()])
+
+	# Always include indices if we have them
+	if not indices.is_empty():
+		combined_arrays[Mesh.ARRAY_INDEX] = indices
 
 	# Create ArrayMesh
 	var array_mesh := ArrayMesh.new()
