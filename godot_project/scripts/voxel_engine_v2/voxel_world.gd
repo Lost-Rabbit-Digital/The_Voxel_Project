@@ -19,7 +19,6 @@ extends Node3D
 @export var enable_threading: bool = true  # Multi-threaded chunk generation
 
 @export_group("Debug")
-@export var show_debug_info: bool = true
 @export var print_stats_interval: float = 5.0
 
 ## Core systems
@@ -33,7 +32,14 @@ var tracked_position: Vector3 = Vector3.ZERO
 var player_node: Node3D
 var active_camera: Camera3D  # For frustum culling
 
-## Debug
+## Debug states (F3 cycles through these)
+enum DebugState {
+	OFF,           # No debug info
+	FPS_ONLY,      # FPS and draw calls only
+	FPS_AND_GIZMO  # FPS, draw calls, and axis gizmo
+}
+
+var debug_state: DebugState = DebugState.FPS_ONLY
 var debug_label: Label
 var axis_gizmo: AxisGizmo
 var stats_timer: float = 0.0
@@ -143,11 +149,10 @@ const PERF_LOG_INTERVAL: float = 2.0  # Log every 2 seconds
 
 ## Handle input for debug toggles
 func _input(event: InputEvent) -> void:
-	# Toggle debug UI with F3
+	# Cycle debug UI states with F3
 	if event is InputEventKey:
 		if event.keycode == KEY_F3 and event.pressed and not event.echo:
-			debug_toggle_info()
-			print("[VoxelWorld] Debug UI toggled: %s" % ("ON" if show_debug_info else "OFF"))
+			_cycle_debug_state()
 
 func _process(delta: float) -> void:
 	var frame_start := Time.get_ticks_usec()
@@ -176,7 +181,7 @@ func _process(delta: float) -> void:
 
 	# Update debug info
 	var debug_start := Time.get_ticks_usec()
-	if show_debug_info:
+	if debug_state != DebugState.OFF:
 		_update_debug_info(delta)
 	var debug_time := (Time.get_ticks_usec() - debug_start) / 1000.0
 
@@ -271,9 +276,7 @@ func _initialize_systems() -> void:
 
 ## Setup debug UI
 func _setup_debug_ui() -> void:
-	if not show_debug_info:
-		return
-
+	# Always create debug elements, visibility controlled by debug_state
 	debug_label = Label.new()
 	debug_label.position = Vector2(10, 10)
 	debug_label.add_theme_font_size_override("font_size", 14)
@@ -283,85 +286,28 @@ func _setup_debug_ui() -> void:
 	axis_gizmo = AxisGizmo.new()
 	add_child(axis_gizmo)
 
-## Update debug information display
+	# Set initial visibility based on debug_state
+	_update_debug_visibility()
+
+## Update debug information display (lightweight version)
 func _update_debug_info(delta: float) -> void:
 	if not debug_label:
 		return
 
+	# Console stats timer
 	stats_timer += delta
 	if stats_timer >= print_stats_interval:
 		stats_timer = 0.0
 		if chunk_manager:
 			chunk_manager.print_stats()
 
+	# LIGHTWEIGHT: Only show FPS and draw calls
 	var fps := Engine.get_frames_per_second()
-	var stats := chunk_manager.get_stats() if chunk_manager else {}
+	var perf_info := Performance.get_monitor(Performance.RENDER_DRAW_CALLS_IN_FRAME)
 
 	var debug_text := ""
 	debug_text += "FPS: %d\n" % fps
-	debug_text += "Position: (%.1f, %.1f, %.1f)\n" % [
-		tracked_position.x,
-		tracked_position.y,
-		tracked_position.z
-	]
-	debug_text += "Chunk: (%d, %d, %d)\n" % [
-		floori(tracked_position.x / VoxelData.CHUNK_SIZE),
-		floori(tracked_position.y / VoxelData.CHUNK_SIZE),
-		floori(tracked_position.z / VoxelData.CHUNK_SIZE)
-	]
-	debug_text += "\n"
-	debug_text += "Active Chunks: %d\n" % stats.get("active_chunks", 0)
-	debug_text += "Pooled Chunks: %d\n" % stats.get("pooled_chunks", 0)
-	debug_text += "Generating: %d\n" % stats.get("generating_chunks", 0)
-	debug_text += "Meshing: %d\n" % stats.get("meshing_chunks", 0)
-	debug_text += "Generated: %d\n" % stats.get("chunks_generated", 0)
-	debug_text += "Meshed: %d\n" % stats.get("chunks_meshed", 0)
-	debug_text += "\n"
-
-	# Add threading stats if enabled
-	if stats.get("threading_enabled", false):
-		debug_text += "Workers: %d\n" % stats.get("worker_count", 0)
-		debug_text += "Pending Jobs: %d\n" % stats.get("pending_jobs", 0)
-		debug_text += "Completed Jobs: %d\n" % stats.get("completed_jobs", 0)
-		debug_text += "\n"
-
-	# Add cache stats if enabled
-	if stats.get("cache_enabled", false):
-		debug_text += "Cache Hits: %d\n" % stats.get("cache_hits", 0)
-		debug_text += "Cache Misses: %d\n" % stats.get("cache_misses", 0)
-		debug_text += "Hit Rate: %.1f%%\n" % stats.get("cache_hit_rate", 0.0)
-		debug_text += "Cache Size: %.1f MB\n" % stats.get("cache_size_mb", 0.0)
-		debug_text += "\n"
-
-	# Add occlusion culling stats if enabled
-	if stats.has("occlusion_mode"):
-		debug_text += "Occlusion: %s\n" % stats.get("occlusion_mode", "DISABLED")
-		if stats.get("occlusion_mode", "DISABLED") != "DISABLED":
-			debug_text += "Visible: %d | Hidden: %d\n" % [
-				stats.get("occlusion_visible", 0),
-				stats.get("occlusion_hidden", 0)
-			]
-			debug_text += "Culled: %.1f%%\n" % stats.get("occlusion_rate", 0.0)
-		debug_text += "\n"
-
-	# Add region batching stats if enabled
-	if stats.get("region_batching_enabled", false):
-		debug_text += "Region Batching: ON\n"
-		debug_text += "Regions: %d (dirty: %d)\n" % [
-			stats.get("active_regions", 0),
-			stats.get("dirty_regions", 0)
-		]
-		debug_text += "\n"
-
-	# Add adaptive chunk sizing info
-	debug_text += "Adaptive Sizing: ON\n"
-	var player_zone := ChunkHeightZones.get_zone_at_y(int(tracked_position.y))
-	var zone_name: String = ChunkHeightZones.ZONE_CONFIG[player_zone].name
-	var chunk_height := ChunkHeightZones.get_chunk_height_at_y(int(tracked_position.y))
-	debug_text += "Zone: %s (%dh)\n" % [zone_name, chunk_height]
-	debug_text += "\n"
-
-	debug_text += "Seed: %d\n" % world_seed
+	debug_text += "Draw Calls: %d" % perf_info
 
 	debug_label.text = debug_text
 
@@ -443,12 +389,32 @@ func debug_set_render_distance(distance: int) -> void:
 		_update_chunks()
 	print("VoxelWorld: Render distance set to %d" % render_distance)
 
-func debug_toggle_info() -> void:
-	show_debug_info = not show_debug_info
+## Cycle through debug states: OFF -> FPS_ONLY -> FPS_AND_GIZMO -> OFF
+func _cycle_debug_state() -> void:
+	match debug_state:
+		DebugState.OFF:
+			debug_state = DebugState.FPS_ONLY
+			print("[VoxelWorld] Debug: FPS + Draw Calls")
+		DebugState.FPS_ONLY:
+			debug_state = DebugState.FPS_AND_GIZMO
+			print("[VoxelWorld] Debug: FPS + Draw Calls + Gizmo")
+		DebugState.FPS_AND_GIZMO:
+			debug_state = DebugState.OFF
+			print("[VoxelWorld] Debug: OFF")
+
+	# Update visibility
+	_update_debug_visibility()
+
+## Update debug element visibility based on current state
+func _update_debug_visibility() -> void:
 	if debug_label:
-		debug_label.visible = show_debug_info
+		debug_label.visible = (debug_state == DebugState.FPS_ONLY or debug_state == DebugState.FPS_AND_GIZMO)
 	if axis_gizmo:
-		axis_gizmo.visible = show_debug_info
+		axis_gizmo.visible = (debug_state == DebugState.FPS_AND_GIZMO)
+
+## Legacy function for compatibility
+func debug_toggle_info() -> void:
+	_cycle_debug_state()
 
 ## Find active camera in scene tree
 func _find_camera() -> Camera3D:
