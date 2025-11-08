@@ -25,6 +25,9 @@ var last_update_position: Vector3 = Vector3.ZERO
 ## Distance threshold before triggering chunk update
 const UPDATE_THRESHOLD: float = 8.0
 
+## Maximum chunks to load per frame (prevents stuttering)
+const MAX_CHUNKS_PER_FRAME: int = 4
+
 ## References to other systems (set by VoxelWorld)
 var terrain_generator = null
 var mesh_builder = null
@@ -62,10 +65,12 @@ func _ready() -> void:
 
 ## Update chunks based on player position
 ## Only updates if player has moved significantly
-func update_chunks(player_position: Vector3) -> void:
+func update_chunks(player_position: Vector3, camera_forward: Vector3 = Vector3.FORWARD) -> void:
 	# Check if we need to update
 	var distance := last_update_position.distance_to(player_position)
 	if distance < UPDATE_THRESHOLD:
+		# Still process any pending chunks from the load queue
+		_process_load_queue()
 		return
 
 	print("[ChunkManager] Player moved %.1f units, updating chunks..." % distance)
@@ -87,9 +92,9 @@ func update_chunks(player_position: Vector3) -> void:
 	if chunks_unloaded > 0:
 		print("[ChunkManager] Unloaded %d chunks" % chunks_unloaded)
 
-	# Load new chunks
+	# Load new chunks with prioritization
 	chunks_before = active_chunks.size()
-	_load_new_chunks(needed_chunks)
+	_load_new_chunks_prioritized(needed_chunks, player_position, camera_forward)
 	var chunks_loaded := active_chunks.size() - chunks_before
 	if chunks_loaded > 0:
 		print("[ChunkManager] Loaded %d new chunks" % chunks_loaded)
@@ -185,11 +190,109 @@ func _unload_distant_chunks(needed_chunks: Dictionary) -> void:
 	for chunk_pos in chunks_to_remove:
 		unload_chunk(chunk_pos)
 
-## Load chunks that aren't loaded yet
+## Load chunks that aren't loaded yet (old version, kept for compatibility)
 func _load_new_chunks(needed_chunks: Dictionary) -> void:
 	for chunk_pos in needed_chunks.keys():
 		if not active_chunks.has(chunk_pos):
 			load_chunk(chunk_pos)
+
+## Load chunks with prioritization based on camera direction and distance
+func _load_new_chunks_prioritized(needed_chunks: Dictionary, player_position: Vector3, camera_forward: Vector3) -> void:
+	# Find chunks that need to be loaded
+	var chunks_to_load: Array[Vector3i] = []
+	for chunk_pos in needed_chunks.keys():
+		if not active_chunks.has(chunk_pos):
+			chunks_to_load.append(chunk_pos)
+
+	# If no chunks to load, clear queue and return
+	if chunks_to_load.is_empty():
+		load_queue.clear()
+		return
+
+	# Calculate priority for each chunk
+	var chunk_priorities: Array[Dictionary] = []
+	for chunk_pos in chunks_to_load:
+		var priority := _calculate_chunk_priority(chunk_pos, player_position, camera_forward)
+		chunk_priorities.append({
+			"pos": chunk_pos,
+			"priority": priority
+		})
+
+	# Sort by priority (higher priority first)
+	chunk_priorities.sort_custom(func(a, b): return a.priority > b.priority)
+
+	# Load the highest priority chunks immediately (up to MAX_CHUNKS_PER_FRAME)
+	var loaded_count := 0
+	load_queue.clear()
+
+	for i in range(chunk_priorities.size()):
+		var chunk_data: Dictionary = chunk_priorities[i]
+		var chunk_pos: Vector3i = chunk_data.pos
+
+		if loaded_count < MAX_CHUNKS_PER_FRAME:
+			load_chunk(chunk_pos)
+			loaded_count += 1
+		else:
+			# Add remaining chunks to queue for next frame
+			load_queue.append(chunk_pos)
+
+	if not load_queue.is_empty():
+		print("[ChunkManager] %d chunks queued for later loading" % load_queue.size())
+
+## Process pending chunks from the load queue
+func _process_load_queue() -> void:
+	if load_queue.is_empty():
+		return
+
+	var loaded_count := 0
+	var chunks_to_remove: Array[Vector3i] = []
+
+	for chunk_pos in load_queue:
+		# Skip if already loaded or out of range
+		if chunk_pos in active_chunks:
+			chunks_to_remove.append(chunk_pos)
+			continue
+
+		# Load chunk
+		load_chunk(chunk_pos)
+		chunks_to_remove.append(chunk_pos)
+		loaded_count += 1
+
+		# Limit chunks per frame
+		if loaded_count >= MAX_CHUNKS_PER_FRAME:
+			break
+
+	# Remove loaded chunks from queue
+	for chunk_pos in chunks_to_remove:
+		load_queue.erase(chunk_pos)
+
+	# if loaded_count > 0:
+	# 	print("[ChunkManager] Processed %d chunks from queue, %d remaining" % [loaded_count, load_queue.size()])
+
+## Calculate priority for a chunk based on distance and camera direction
+## Higher priority = should be loaded sooner
+func _calculate_chunk_priority(chunk_pos: Vector3i, player_position: Vector3, camera_forward: Vector3) -> float:
+	# Get chunk center in world space
+	var chunk_world_pos := Vector3(chunk_pos * VoxelData.CHUNK_SIZE) + Vector3.ONE * (VoxelData.CHUNK_SIZE * 0.5)
+
+	# Calculate distance from player (inverse priority - closer is higher)
+	var distance := player_position.distance_to(chunk_world_pos)
+	var distance_priority := 1.0 / max(distance, 1.0)  # Avoid division by zero
+
+	# Calculate direction from player to chunk
+	var to_chunk := (chunk_world_pos - player_position).normalized()
+
+	# Calculate dot product with camera forward (1.0 = directly ahead, -1.0 = directly behind)
+	var direction_alignment := camera_forward.dot(to_chunk)
+
+	# Boost priority for chunks in front of camera
+	var direction_priority := max(direction_alignment, 0.0)  # 0.0 to 1.0
+
+	# Combined priority (weighted sum)
+	# Distance is more important (weight 2.0), direction is secondary (weight 1.0)
+	var priority := (distance_priority * 2.0) + (direction_priority * 1.0)
+
+	return priority
 
 ## Load a single chunk at the given position
 func load_chunk(chunk_pos: Vector3i) -> Chunk:

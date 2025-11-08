@@ -120,7 +120,11 @@ func _process(delta: float) -> void:
 
 	# Update chunks based on player position
 	if enable_auto_generation and chunk_manager:
-		chunk_manager.update_chunks(tracked_position)
+		# Pass camera for prioritization if available
+		var camera_forward := Vector3.FORWARD
+		if active_camera:
+			camera_forward = -active_camera.global_transform.basis.z
+		chunk_manager.update_chunks(tracked_position, camera_forward)
 
 	# Update frustum culling
 	if active_camera and chunk_manager:
