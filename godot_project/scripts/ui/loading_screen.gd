@@ -62,10 +62,10 @@ func _start_loading_game() -> void:
 
 		if status == ResourceLoader.THREAD_LOAD_IN_PROGRESS:
 			# Update progress
-			var progress := []
+			var progress: Array = []
 			ResourceLoader.load_threaded_get_status(target_scene_path, progress)
 			if progress.size() > 0:
-				var percent := progress[0] * 100.0
+				var percent: float = float(progress[0]) * 100.0
 				if message_label:
 					message_label.text = "[center]Loading game assets...\n\n[b]%.0f%%[/b][/center]" % percent
 			await get_tree().process_frame
