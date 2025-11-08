@@ -5,8 +5,10 @@
 ## Threading Model:
 ## - Terrain generation: Always threaded (worker threads via ChunkThreadPool)
 ## - Mesh building:
-##   - Region batching ENABLED (default): Main thread only
-##     Chunks skip individual meshing; regions combine multiple chunks
+##   - Region batching ENABLED (default): Fully threaded
+##     Individual chunks build mesh arrays on worker threads
+##     Region mesh combining also happens on worker threads
+##     Only final mesh instance creation happens on main thread
 ##   - Region batching DISABLED: Threaded via ChunkThreadPool
 ##     Each chunk gets its own mesh built on worker thread
 class_name ChunkManager
@@ -53,6 +55,9 @@ var active_regions: Dictionary = {}
 
 ## Regions that need mesh rebuilding
 var dirty_regions: Dictionary = {}  # Vector3i -> true
+
+## Regions currently being rebuilt (to avoid duplicate jobs)
+var rebuilding_regions: Dictionary = {}  # Vector3i -> true
 
 ## Maximum regions to rebuild per frame (adaptive based on performance)
 var max_region_rebuilds_per_frame: int = 4  # Start conservative, will adapt
@@ -194,6 +199,8 @@ func _on_job_completed(job) -> void:
 		_on_generation_completed(job)
 	elif job.job_type == ChunkThreadPool.JobType.BUILD_MESH:
 		_on_meshing_completed(job)
+	elif job.job_type == ChunkThreadPool.JobType.BUILD_REGION_MESH:
+		_on_region_rebuild_completed(job)
 
 ## Handle completed terrain generation job
 func _on_generation_completed(job) -> void:
@@ -340,9 +347,87 @@ func _on_meshing_completed(job) -> void:
 	var is_rebuild: bool = chunk.get_meta("is_rebuild", false)
 	if not is_rebuild:
 		_rebuild_neighbor_meshes(chunk_pos)
-	else:
-		# Clear the rebuild flag
-		chunk.remove_meta("is_rebuild")
+
+## Handle completed region mesh building job
+func _on_region_rebuild_completed(job) -> void:
+	var region_pos: Vector3i = job.region_pos
+
+	# Remove from rebuilding set
+	rebuilding_regions.erase(region_pos)
+
+	# Remove from dirty regions
+	dirty_regions.erase(region_pos)
+
+	# Check for errors
+	if job.error:
+		push_error("[ChunkManager] Region rebuild error for region %s: %s" % [region_pos, job.error])
+		return
+
+	# Get region
+	if not region_pos in active_regions:
+		# Region was unloaded while being rebuilt
+		return
+
+	var region: ChunkRegion = active_regions[region_pos]
+	if not region or not is_instance_valid(region):
+		# Region was freed
+		return
+
+	# Get result data
+	var result: Dictionary = job.result
+	if not result or result.is_empty():
+		# No mesh data - region might be empty
+		region.is_dirty = false
+		return
+
+	var combined_arrays: Array = result.get("combined_arrays", [])
+	if combined_arrays.is_empty() or combined_arrays[Mesh.ARRAY_VERTEX] == null:
+		# No geometry - region is empty
+		region.is_dirty = false
+		return
+
+	# Create the mesh on the main thread (must be done here, not on worker thread)
+	# Clear existing mesh
+	if region.mesh_instance:
+		region.remove_child(region.mesh_instance)
+		region.mesh_instance.queue_free()
+		region.mesh_instance = null
+
+	# Create ArrayMesh
+	var array_mesh := ArrayMesh.new()
+	array_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, combined_arrays)
+
+	# Create MeshInstance3D
+	region.mesh_instance = MeshInstance3D.new()
+	region.mesh_instance.mesh = array_mesh
+
+	# Apply material if available
+	if region.material:
+		region.mesh_instance.material_override = region.material
+
+	# Position at region origin
+	region.mesh_instance.position = Vector3.ZERO  # Vertices are already offset
+
+	# Add to scene
+	region.add_child(region.mesh_instance)
+
+	# Update region stats
+	region.vertex_count = result.get("vertex_count", 0)
+	region.chunk_count = result.get("chunk_count", 0)
+	region.is_dirty = false
+
+	# Log performance stats
+	var cache_hits: int = result.get("cache_hits", 0)
+	var cache_misses: int = result.get("cache_misses", 0)
+	var total_chunks: int = result.get("chunk_count", 0)
+	var cache_hit_rate := (cache_hits * 100.0 / total_chunks) if total_chunks > 0 else 0.0
+
+	# Only log if there were cache misses (indicates first-time builds)
+	if cache_misses > 0 or total_chunks > 15:
+		print("[ChunkRegion] Region %s: %d chunks (%d vertices), cache: %d hits/%d misses (%.0f%% hit rate) [ASYNC]" % [
+			region_pos, total_chunks, region.vertex_count,
+			cache_hits, cache_misses, cache_hit_rate
+		])
 
 ## Tracked position for priority calculations (set by update_chunks)
 var tracked_position: Vector3 = Vector3.ZERO
@@ -1119,6 +1204,7 @@ func get_stats() -> Dictionary:
 		stats["region_batching_enabled"] = true
 		stats["active_regions"] = active_regions.size()
 		stats["dirty_regions"] = dirty_regions.size()
+		stats["rebuilding_regions"] = rebuilding_regions.size()
 	else:
 		stats["region_batching_enabled"] = false
 
@@ -1214,51 +1300,53 @@ func _process_dirty_regions() -> void:
 	if dirty_regions.is_empty():
 		return
 
-	var regions_rebuilt := 0
-	var rebuild_start_time := Time.get_ticks_usec()
+	# Don't queue more jobs if thread pool is backed up
+	if thread_pool and thread_pool.get_pending_job_count() > MAX_PENDING_JOBS:
+		return
 
-	# Process dirty regions (limit per frame to avoid stuttering)
-	var regions_to_clear: Array[Vector3i] = []
+	var regions_queued := 0
 
+	# Queue dirty regions for async rebuilding (limit per frame to avoid overwhelming thread pool)
 	for region_pos in dirty_regions.keys():
-		# Stop if we've hit our limit or exceeded frame budget
-		if regions_rebuilt >= max_region_rebuilds_per_frame:
+		# Stop if we've hit our limit
+		if regions_queued >= max_region_rebuilds_per_frame:
 			break
 
-		# Check if we're taking too long (emergency brake)
-		var elapsed_ms := (Time.get_ticks_usec() - rebuild_start_time) / 1000.0
-		if elapsed_ms > TARGET_FRAME_TIME_MS * 0.5 and regions_rebuilt > 0:
-			# We're using more than half the frame budget, stop for now
-			break
+		# Skip if already being rebuilt
+		if region_pos in rebuilding_regions:
+			continue
 
-		if region_pos in active_regions:
-			var region: ChunkRegion = active_regions[region_pos]
+		# Check if region still exists
+		if not region_pos in active_regions:
+			dirty_regions.erase(region_pos)
+			continue
 
-			if region.needs_rebuild() and mesh_builder:
-				region.rebuild_combined_mesh(mesh_builder)
-				regions_rebuilt += 1
+		var region: ChunkRegion = active_regions[region_pos]
+		if not region or not is_instance_valid(region):
+			dirty_regions.erase(region_pos)
+			continue
 
-		regions_to_clear.append(region_pos)
+		# Skip if region doesn't need rebuild
+		if not region.needs_rebuild():
+			dirty_regions.erase(region_pos)
+			continue
 
-	# Clear processed regions
-	for region_pos in regions_to_clear:
-		dirty_regions.erase(region_pos)
+		# Queue region rebuild on worker thread
+		if thread_pool and mesh_builder:
+			# Calculate priority based on distance to player
+			var region_world_pos := region.get_region_world_position()
+			var distance := tracked_position.distance_to(region_world_pos)
+			var priority: float = 1.0 / max(distance, 1.0)
 
-	# Adaptive rate limiting based on actual performance
-	if regions_rebuilt > 0:
-		var rebuild_time_ms := (Time.get_ticks_usec() - rebuild_start_time) / 1000.0
-		var avg_time_per_region := rebuild_time_ms / regions_rebuilt
+			# Queue the job
+			thread_pool.queue_region_rebuild_job(region, region_pos, mesh_builder, priority)
 
-		# If we're too slow, reduce the rate
-		if rebuild_time_ms > TARGET_FRAME_TIME_MS * 0.7:
-			max_region_rebuilds_per_frame = maxi(MIN_REGION_REBUILDS_PER_FRAME, max_region_rebuilds_per_frame - 1)
-			print("[ChunkManager] Reducing region rebuild rate to %d (frame time: %.1fms)" % [max_region_rebuilds_per_frame, rebuild_time_ms])
-		# If we're fast enough, we can increase the rate
-		elif rebuild_time_ms < TARGET_FRAME_TIME_MS * 0.3 and max_region_rebuilds_per_frame < MAX_REGION_REBUILDS_PER_FRAME:
-			max_region_rebuilds_per_frame += 1
+			# Mark as rebuilding
+			rebuilding_regions[region_pos] = true
+			regions_queued += 1
 
-		# Log region rebuild performance if we have a backlog
-		if dirty_regions.size() > 5:
-			print("[ChunkManager] Rebuilt %d regions in %.1fms (avg: %.1fms/region), %d regions pending" % [
-				regions_rebuilt, rebuild_time_ms, avg_time_per_region, dirty_regions.size()
-			])
+	# Log queue status if we have a backlog
+	if dirty_regions.size() > 5 and regions_queued > 0:
+		print("[ChunkManager] Queued %d regions for async rebuild, %d regions pending, %d rebuilding" % [
+			regions_queued, dirty_regions.size(), rebuilding_regions.size()
+		])
