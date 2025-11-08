@@ -134,7 +134,7 @@ func _process_meshing_job(job: ChunkJob, worker_id: int) -> void:
 
 	# Build mesh data (thread-safe - reads chunk data without modification)
 	# Note: We build the mesh data but don't create MeshInstance3D (that must be on main thread)
-	var mesh_data := job.mesh_builder.build_mesh_data(job.chunk)
+	var mesh_data: Dictionary = job.mesh_builder.build_mesh_data(job.chunk)
 
 	job.result = mesh_data
 	job.completed = true
