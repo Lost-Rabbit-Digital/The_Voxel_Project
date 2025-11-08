@@ -255,9 +255,9 @@ func get_aabb() -> AABB:
 
 	for chunk in chunks.values():
 		if chunk and is_instance_valid(chunk):
-			var chunk_aabb := chunk.get_aabb()
-			var chunk_min := chunk_aabb.position
-			var chunk_max := chunk_aabb.position + chunk_aabb.size
+			var chunk_aabb: AABB = chunk.get_aabb()
+			var chunk_min: Vector3 = chunk_aabb.position
+			var chunk_max: Vector3 = chunk_aabb.position + chunk_aabb.size
 
 			min_pos.x = min(min_pos.x, chunk_min.x)
 			min_pos.y = min(min_pos.y, chunk_min.y)
