@@ -119,8 +119,12 @@ func generate_chunk(chunk_pos: Vector3i) -> VoxelData:
 				if voxel_type != VoxelTypes.Type.AIR:
 					voxel_data.set_voxel(Vector3i(x, y, z), voxel_type)
 
-	# Manage cache size
-	if height_cache.size() > MAX_CACHE_SIZE:
+	# Manage cache size (thread-safe check)
+	cache_mutex.lock()
+	var should_clear := height_cache.size() > MAX_CACHE_SIZE
+	cache_mutex.unlock()
+
+	if should_clear:
 		_clear_old_cache_entries()
 
 	return voxel_data

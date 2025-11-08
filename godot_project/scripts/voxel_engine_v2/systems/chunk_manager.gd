@@ -1,6 +1,14 @@
 ## ChunkManager - Manages chunk lifecycle, pooling, and spatial queries
 ## Responsible for loading/unloading chunks based on player position
 ## Uses object pooling to minimize garbage collection pressure
+##
+## Threading Model:
+## - Terrain generation: Always threaded (worker threads via ChunkThreadPool)
+## - Mesh building:
+##   - Region batching ENABLED (default): Main thread only
+##     Chunks skip individual meshing; regions combine multiple chunks
+##   - Region batching DISABLED: Threaded via ChunkThreadPool
+##     Each chunk gets its own mesh built on worker thread
 class_name ChunkManager
 extends Node3D
 
@@ -229,16 +237,28 @@ func _on_generation_completed(job) -> void:
 	# Update neighbor references
 	_update_chunk_neighbors(chunk_pos, chunk)
 
-	# Queue mesh building job
-	chunk.state = Chunk.State.MESHING
-	meshing_chunks[chunk_pos] = chunk
+	# Handle meshing based on batching mode
+	if enable_region_batching:
+		# Region batching mode: Skip individual chunk meshing
+		# The region will build combined mesh on main thread
+		chunk.state = Chunk.State.ACTIVE
 
-	if thread_pool:
-		var priority: float = 1.0 / max(tracked_position.distance_to(chunk.get_world_position()), 1.0)
-		thread_pool.queue_meshing_job(chunk, mesh_builder, priority)
+		# Add to region immediately
+		_add_chunk_to_region(chunk)
+
+		# Check if initial chunks are ready
+		_check_initial_chunks_ready()
 	else:
-		# Fallback to synchronous meshing
-		_build_chunk_mesh_sync(chunk)
+		# Traditional mode: Build individual chunk mesh (potentially threaded)
+		chunk.state = Chunk.State.MESHING
+		meshing_chunks[chunk_pos] = chunk
+
+		if thread_pool:
+			var priority: float = 1.0 / max(tracked_position.distance_to(chunk.get_world_position()), 1.0)
+			thread_pool.queue_meshing_job(chunk, mesh_builder, priority)
+		else:
+			# Fallback to synchronous meshing
+			_build_chunk_mesh_sync(chunk)
 
 ## Handle completed mesh building job
 func _on_meshing_completed(job) -> void:
