@@ -94,15 +94,25 @@ func set_voxel(local_pos: Vector3i, voxel_type: int) -> void:
 
 ## Convert local position to world position
 func local_to_world(local_pos: Vector3i) -> Vector3i:
+	if voxel_data:
+		return voxel_data.local_to_world(local_pos)
+	# Fallback for chunks without voxel data
 	return position * VoxelData.CHUNK_SIZE + local_pos
 
 ## Convert world position to local position
 func world_to_local(world_pos: Vector3i) -> Vector3i:
+	if voxel_data:
+		return voxel_data.world_to_local(world_pos)
+	# Fallback for chunks without voxel data
 	return world_pos - (position * VoxelData.CHUNK_SIZE)
 
 ## Get the world position of this chunk's origin
 func get_world_position() -> Vector3:
-	return Vector3(position * VoxelData.CHUNK_SIZE)
+	# Use adaptive chunk sizing for proper world position
+	var world_x := float(position.x * VoxelData.CHUNK_SIZE_XZ)
+	var world_y := float(ChunkHeightZones.chunk_y_to_world_y(position.y))
+	var world_z := float(position.z * VoxelData.CHUNK_SIZE_XZ)
+	return Vector3(world_x, world_y, world_z)
 
 ## Check if this chunk is empty (all air)
 func is_empty() -> bool:
@@ -144,14 +154,14 @@ func has_all_neighbors() -> bool:
 
 ## Calculate distance to a position (squared, for performance)
 func distance_squared_to(pos: Vector3) -> float:
-	var chunk_center := get_world_position() + Vector3.ONE * (VoxelData.CHUNK_SIZE * 0.5)
+	var aabb := get_aabb()
+	var chunk_center := aabb.position + (aabb.size * 0.5)
 	return chunk_center.distance_squared_to(pos)
 
 ## Get axis-aligned bounding box for this chunk
 func get_aabb() -> AABB:
-	var world_pos := get_world_position()
-	var size := Vector3.ONE * VoxelData.CHUNK_SIZE
-	return AABB(world_pos, size)
+	# Use adaptive chunk sizing for proper AABB
+	return ChunkHeightZones.get_chunk_world_bounds(position)
 
 ## Update last access time (for LRU management)
 func update_access_time() -> void:

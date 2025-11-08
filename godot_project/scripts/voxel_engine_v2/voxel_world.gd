@@ -264,6 +264,14 @@ func _update_debug_info(delta: float) -> void:
 		]
 		debug_text += "\n"
 
+	# Add adaptive chunk sizing info
+	debug_text += "Adaptive Sizing: ON\n"
+	var player_zone := ChunkHeightZones.get_zone_at_y(int(tracked_position.y))
+	var zone_name := ChunkHeightZones.ZONE_CONFIG[player_zone].name
+	var chunk_height := ChunkHeightZones.get_chunk_height_at_y(int(tracked_position.y))
+	debug_text += "Zone: %s (%dh)\n" % [zone_name, chunk_height]
+	debug_text += "\n"
+
 	debug_text += "Seed: %d\n" % world_seed
 
 	debug_label.text = debug_text

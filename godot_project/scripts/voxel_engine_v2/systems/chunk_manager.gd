@@ -112,6 +112,10 @@ func _ready() -> void:
 	occlusion_culler.mode = OcclusionCuller.Mode.FLOOD_FILL
 	print("[ChunkManager] Occlusion culler initialized")
 
+	# Print adaptive chunk sizing configuration
+	print("[ChunkManager] Adaptive chunk sizing enabled:")
+	ChunkHeightZones.print_zone_config()
+
 	print("[ChunkManager] Ready!")
 
 ## Update chunks based on player position
@@ -920,13 +924,9 @@ func set_voxel_at_world(world_pos: Vector3i, voxel_type: int) -> void:
 		chunk.set_voxel(local_pos, voxel_type)
 		# TODO: Trigger mesh rebuild
 
-## Convert world position to chunk position
+## Convert world position to chunk position (uses adaptive chunk heights)
 func world_to_chunk_position(world_pos: Vector3) -> Vector3i:
-	return Vector3i(
-		floori(world_pos.x / VoxelData.CHUNK_SIZE),
-		floori(world_pos.y / VoxelData.CHUNK_SIZE),
-		floori(world_pos.z / VoxelData.CHUNK_SIZE)
-	)
+	return ChunkHeightZones.world_to_chunk_position(world_pos)
 
 ## Generate a test chunk (fallback if no terrain generator)
 func _generate_test_chunk(chunk: Chunk) -> void:

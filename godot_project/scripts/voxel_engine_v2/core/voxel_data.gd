@@ -1,15 +1,18 @@
 ## VoxelData - Efficient voxel storage using PackedByteArray
-## Stores a 3D grid of voxels (16x16x16) in a compact 1D array
+## Stores a 3D grid of voxels with adaptive height based on Y-level
 ## Each voxel is 1 byte = 256 possible block types
-## Total memory per chunk: 16x16x16 = 4096 bytes = 4KB
+## Memory per chunk varies: 16x16x16 = 4KB, 16x16x64 = 16KB
 class_name VoxelData
 extends RefCounted
 
-## Chunk dimensions (cubic for simplicity)
-const CHUNK_SIZE: int = 16
+## Horizontal chunk dimensions (constant)
+const CHUNK_SIZE_XZ: int = 16
 
-## Total number of voxels in a chunk (16^3)
-const CHUNK_VOLUME: int = CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE
+## Legacy constant for backward compatibility
+const CHUNK_SIZE: int = CHUNK_SIZE_XZ
+
+## Chunk height (variable based on zone)
+var chunk_size_y: int = 16
 
 ## Voxel data storage (4096 bytes per chunk)
 ## Index formula: index = x + y * CHUNK_SIZE + z * CHUNK_SIZE * CHUNK_SIZE
@@ -27,6 +30,10 @@ var uniform_value: int = VoxelTypes.Type.AIR
 ## Initialize with all air (0)
 func _init(chunk_pos: Vector3i = Vector3i.ZERO) -> void:
 	chunk_position = chunk_pos
+
+	# Determine chunk height based on Y position (adaptive sizing)
+	chunk_size_y = ChunkHeightZones.get_chunk_height_for_chunk(chunk_pos)
+
 	# Start as uniform air chunk (no array allocation!)
 	is_uniform = true
 	uniform_value = VoxelTypes.Type.AIR
@@ -63,44 +70,59 @@ func set_voxel(local_pos: Vector3i, voxel_type: int) -> void:
 ## Expand a uniform chunk into a full array (called when first non-uniform write happens)
 func _expand_uniform_chunk() -> void:
 	data = PackedByteArray()
-	data.resize(CHUNK_VOLUME)
+	var chunk_volume := get_chunk_volume()
+	data.resize(chunk_volume)
 	data.fill(uniform_value)
 	is_uniform = false
 
-## Check if a local position is within valid chunk bounds (0-15 on each axis)
+## Get total volume of this chunk (may vary based on height)
+func get_chunk_volume() -> int:
+	return CHUNK_SIZE_XZ * chunk_size_y * CHUNK_SIZE_XZ
+
+## Check if a local position is within valid chunk bounds
 func is_position_valid(local_pos: Vector3i) -> bool:
-	return (local_pos.x >= 0 and local_pos.x < CHUNK_SIZE and
-			local_pos.y >= 0 and local_pos.y < CHUNK_SIZE and
-			local_pos.z >= 0 and local_pos.z < CHUNK_SIZE)
+	return (local_pos.x >= 0 and local_pos.x < CHUNK_SIZE_XZ and
+			local_pos.y >= 0 and local_pos.y < chunk_size_y and
+			local_pos.z >= 0 and local_pos.z < CHUNK_SIZE_XZ)
 
 ## Convert 3D local position to 1D array index
-## Formula: index = x + y * CHUNK_SIZE + z * CHUNK_SIZE * CHUNK_SIZE
+## Formula: index = x + y * CHUNK_SIZE_XZ + z * CHUNK_SIZE_XZ * chunk_size_y
 func get_index(local_pos: Vector3i) -> int:
-	return local_pos.x + local_pos.y * CHUNK_SIZE + local_pos.z * CHUNK_SIZE * CHUNK_SIZE
+	return local_pos.x + local_pos.y * CHUNK_SIZE_XZ + local_pos.z * CHUNK_SIZE_XZ * chunk_size_y
 
 ## Convert 1D array index back to 3D local position
 func get_position_from_index(index: int) -> Vector3i:
-	var z := index / (CHUNK_SIZE * CHUNK_SIZE)
-	var remainder := index % (CHUNK_SIZE * CHUNK_SIZE)
-	var y := remainder / CHUNK_SIZE
-	var x := remainder % CHUNK_SIZE
+	var z := index / (CHUNK_SIZE_XZ * chunk_size_y)
+	var remainder := index % (CHUNK_SIZE_XZ * chunk_size_y)
+	var y := remainder / CHUNK_SIZE_XZ
+	var x := remainder % CHUNK_SIZE_XZ
 	return Vector3i(x, y, z)
 
 ## Convert local position to world position
 func local_to_world(local_pos: Vector3i) -> Vector3i:
-	return chunk_position * CHUNK_SIZE + local_pos
+	# Use adaptive chunk sizing for Y coordinate
+	var world_x := chunk_position.x * CHUNK_SIZE_XZ + local_pos.x
+	var world_y := ChunkHeightZones.chunk_y_to_world_y(chunk_position.y) + local_pos.y
+	var world_z := chunk_position.z * CHUNK_SIZE_XZ + local_pos.z
+	return Vector3i(world_x, world_y, world_z)
 
 ## Convert world position to local position within this chunk
 func world_to_local(world_pos: Vector3i) -> Vector3i:
-	return world_pos - (chunk_position * CHUNK_SIZE)
+	# Use adaptive chunk sizing for Y coordinate
+	var local_x := world_pos.x - (chunk_position.x * CHUNK_SIZE_XZ)
+	var chunk_world_y := ChunkHeightZones.chunk_y_to_world_y(chunk_position.y)
+	var local_y := world_pos.y - chunk_world_y
+	var local_z := world_pos.z - (chunk_position.z * CHUNK_SIZE_XZ)
+	return Vector3i(local_x, local_y, local_z)
 
 ## Check if the chunk is completely empty (all AIR)
 func is_empty() -> bool:
-	# OPTIMIZATION: O(1) check for uniform chunks instead of O(4096)
+	# OPTIMIZATION: O(1) check for uniform chunks
 	if is_uniform:
 		return uniform_value == VoxelTypes.Type.AIR
 
-	for i in range(CHUNK_VOLUME):
+	var volume := get_chunk_volume()
+	for i in range(volume):
 		if data[i] != VoxelTypes.Type.AIR:
 			return false
 	return true
@@ -111,7 +133,8 @@ func is_full() -> bool:
 	if is_uniform:
 		return uniform_value != VoxelTypes.Type.AIR
 
-	for i in range(CHUNK_VOLUME):
+	var volume := get_chunk_volume()
+	for i in range(volume):
 		if data[i] == VoxelTypes.Type.AIR:
 			return false
 	return true
@@ -120,10 +143,12 @@ func is_full() -> bool:
 func count_solid_voxels() -> int:
 	# OPTIMIZATION: O(1) for uniform chunks
 	if is_uniform:
-		return 0 if uniform_value == VoxelTypes.Type.AIR else CHUNK_VOLUME
+		var volume := get_chunk_volume()
+		return 0 if uniform_value == VoxelTypes.Type.AIR else volume
 
 	var count := 0
-	for i in range(CHUNK_VOLUME):
+	var volume := get_chunk_volume()
+	for i in range(volume):
 		if data[i] != VoxelTypes.Type.AIR:
 			count += 1
 	return count
