@@ -235,7 +235,7 @@ func _on_meshing_completed(job) -> void:
 	chunk.state = Chunk.State.ACTIVE
 
 	# Only rebuild neighbors if this was a new chunk load, not a neighbor rebuild
-	var is_rebuild := chunk.get_meta("is_rebuild", false)
+	var is_rebuild: bool = chunk.get_meta("is_rebuild", false)
 	if not is_rebuild:
 		_rebuild_neighbor_meshes(chunk_pos)
 	else:
