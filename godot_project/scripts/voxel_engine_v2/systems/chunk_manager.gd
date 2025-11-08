@@ -1367,19 +1367,20 @@ func _process_pending_mesh_creations() -> void:
 			break
 
 		# Peek at next mesh to check if it's too large
-		var mesh_data: Dictionary = pending_mesh_creations[0]
-		var vertex_count: int = mesh_data.vertex_count
+		var peek_data: Dictionary = pending_mesh_creations[0]
+		var peek_vertex_count: int = peek_data.vertex_count
 
 		# Skip meshes that would exceed our vertex budget
 		# Put them at the end of the queue to retry later
-		if vertices_processed + vertex_count > MAX_VERTICES_PER_FRAME:
+		var mesh_data: Dictionary
+		if vertices_processed + peek_vertex_count > MAX_VERTICES_PER_FRAME:
 			# Move to end of queue and try next mesh
 			pending_mesh_creations.pop_front()
-			pending_mesh_creations.append(mesh_data)
+			pending_mesh_creations.append(peek_data)
 
 			# If we've checked all meshes and none fit, break
 			if meshes_created == 0:
-				# All pending meshes are too large, process one anyway
+				# All pending meshes are too large, process one anyway (the next in queue)
 				mesh_data = pending_mesh_creations.pop_front()
 			else:
 				break
@@ -1387,10 +1388,11 @@ func _process_pending_mesh_creations() -> void:
 			# This mesh fits in our budget, process it
 			mesh_data = pending_mesh_creations.pop_front()
 
+		# Extract data from the mesh we're actually processing
 		var region_pos: Vector3i = mesh_data.region_pos
 		var region = mesh_data.region
 		var combined_arrays: Array = mesh_data.combined_arrays
-		# vertex_count already extracted above
+		var vertex_count: int = mesh_data.vertex_count
 		var chunk_count: int = mesh_data.chunk_count
 		var cache_hits: int = mesh_data.cache_hits
 		var cache_misses: int = mesh_data.cache_misses
