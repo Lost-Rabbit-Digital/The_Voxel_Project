@@ -142,21 +142,22 @@ Your voxel engine was already very well optimized before this research:
 # Added vertex compression constant
 const ENABLE_VERTEX_COMPRESSION: bool = true
 
+# Godot 4 compression flags (ARRAY_FLAG_COMPRESS_ATTRIBUTES compresses attributes)
+const COMPRESSION_FLAGS: int = Mesh.ARRAY_FLAG_COMPRESS_ATTRIBUTES if ENABLE_VERTEX_COMPRESSION else 0
+
 # Modified mesh commits to use compression
-if ENABLE_VERTEX_COMPRESSION:
-    mesh = st.commit(null, Mesh.ARRAY_COMPRESS_DEFAULT)
-else:
-    mesh = st.commit()
+mesh = st.commit(null, COMPRESSION_FLAGS)
 ```
 
 ### chunk_region.gd
 ```gdscript
 # Added compression to combined mesh creation
+var compression_flags: int = Mesh.ARRAY_FLAG_COMPRESS_ATTRIBUTES
 array_mesh.add_surface_from_arrays(
     Mesh.PRIMITIVE_TRIANGLES,
     combined_arrays,
     [], {},
-    Mesh.ARRAY_COMPRESS_DEFAULT  # NEW!
+    compression_flags  # Godot 4 compression flag
 )
 ```
 
