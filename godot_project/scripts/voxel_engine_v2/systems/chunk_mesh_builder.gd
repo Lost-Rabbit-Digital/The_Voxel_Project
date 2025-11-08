@@ -23,11 +23,25 @@ var default_material: StandardMaterial3D
 ## Reference to chunk manager (for neighbor queries)
 var chunk_manager: ChunkManager
 
+## OPTIMIZATION: Pre-allocated mask array for greedy meshing (reused across all slices)
+## Avoids allocating 96 arrays per chunk (6 directions × 16 slices)
+var _greedy_mask: Array = []
+
 func _init(manager: ChunkManager = null) -> void:
 	print("[MeshBuilder] Initializing...")
 	chunk_manager = manager
 	_create_default_material()
+	_preallocate_greedy_mask()
 	print("[MeshBuilder] Ready")
+
+## Pre-allocate the greedy meshing mask array
+func _preallocate_greedy_mask() -> void:
+	_greedy_mask.resize(VoxelData.CHUNK_SIZE)
+	for i in range(VoxelData.CHUNK_SIZE):
+		_greedy_mask[i] = []
+		_greedy_mask[i].resize(VoxelData.CHUNK_SIZE)
+		for j in range(VoxelData.CHUNK_SIZE):
+			_greedy_mask[i][j] = null
 
 ## Create a simple default material for testing
 func _create_default_material() -> void:
@@ -254,14 +268,8 @@ func _greedy_mesh_direction(st: SurfaceTool, chunk: Chunk, direction: Vector3i) 
 
 	# Iterate through each slice perpendicular to the direction
 	for d in range(VoxelData.CHUNK_SIZE):
-		# Create a 2D mask for this slice
-		var mask := []
-		mask.resize(VoxelData.CHUNK_SIZE)
-		for i in range(VoxelData.CHUNK_SIZE):
-			mask[i] = []
-			mask[i].resize(VoxelData.CHUNK_SIZE)
-			for j in range(VoxelData.CHUNK_SIZE):
-				mask[i][j] = null
+		# OPTIMIZATION: Clear reused mask instead of allocating new one
+		_clear_greedy_mask()
 
 		# Fill the mask and track if slice has any faces
 		var has_faces := false
@@ -277,7 +285,7 @@ func _greedy_mesh_direction(st: SurfaceTool, chunk: Chunk, direction: Vector3i) 
 				var voxel_type := chunk.get_voxel(pos)
 				if voxel_type != VoxelTypes.Type.AIR and not VoxelTypes.is_transparent(voxel_type):
 					if _should_add_face(chunk, pos, direction):
-						mask[u][v] = voxel_type
+						_greedy_mask[u][v] = voxel_type
 						has_faces = true
 
 		# Skip empty slices (major performance optimization!)
@@ -285,7 +293,7 @@ func _greedy_mesh_direction(st: SurfaceTool, chunk: Chunk, direction: Vector3i) 
 			continue
 
 		# Greedily merge quads in this slice
-		var result := _merge_quads_in_mask(st, chunk, mask, direction, u_axis, v_axis, d_axis, d)
+		var result := _merge_quads_in_mask(st, chunk, _greedy_mask, direction, u_axis, v_axis, d_axis, d)
 		vertices_added += result.vertices
 		quads_added += result.quads
 
@@ -312,6 +320,12 @@ func _get_axis_permutation(primary_axis: int) -> Array:
 			return [0, 1, 2]  # u=X, v=Y, d=Z
 		_:
 			return [0, 1, 2]
+
+## Clear the greedy mask (faster than allocating new arrays)
+func _clear_greedy_mask() -> void:
+	for i in range(VoxelData.CHUNK_SIZE):
+		for j in range(VoxelData.CHUNK_SIZE):
+			_greedy_mask[i][j] = null
 
 ## Greedily merge quads in a 2D mask
 func _merge_quads_in_mask(st: SurfaceTool, chunk: Chunk, mask: Array, direction: Vector3i,

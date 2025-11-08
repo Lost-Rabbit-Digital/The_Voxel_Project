@@ -84,8 +84,8 @@ func _worker_thread_function(worker_id: int) -> void:
 
 		jobs_mutex.lock()
 		if pending_jobs.size() > 0:
-			# Get highest priority job
-			pending_jobs.sort_custom(func(a, b): return a.priority > b.priority)
+			# OPTIMIZATION: Don't sort every time! Jobs are inserted in priority order.
+			# Just take the first job (highest priority already at front)
 			job = pending_jobs.pop_front()
 		jobs_mutex.unlock()
 
@@ -99,7 +99,8 @@ func _worker_thread_function(worker_id: int) -> void:
 			stats_jobs_completed += 1
 			jobs_mutex.unlock()
 		else:
-			# No jobs available, sleep briefly
+			# No jobs available, sleep briefly to avoid busy-waiting
+			# OPTIMIZATION: Could use semaphore here, but 1ms is acceptable for now
 			OS.delay_msec(1)
 
 	print("[ChunkThreadPool] Worker %d exiting" % worker_id)
@@ -148,7 +149,8 @@ func queue_generation_job(chunk_pos: Vector3i, terrain_generator, priority: floa
 	job.priority = priority
 
 	jobs_mutex.lock()
-	pending_jobs.append(job)
+	# OPTIMIZATION: Insert job in priority order to avoid sorting on every fetch
+	_insert_job_sorted(job)
 	stats_jobs_queued += 1
 	stats_generation_jobs += 1
 	jobs_mutex.unlock()
@@ -163,10 +165,27 @@ func queue_meshing_job(chunk: Chunk, mesh_builder, priority: float = 0.0) -> voi
 	job.priority = priority
 
 	jobs_mutex.lock()
-	pending_jobs.append(job)
+	# OPTIMIZATION: Insert job in priority order to avoid sorting on every fetch
+	_insert_job_sorted(job)
 	stats_jobs_queued += 1
 	stats_meshing_jobs += 1
 	jobs_mutex.unlock()
+
+## Insert job in priority order (higher priority at front)
+## O(n) insertion is much better than O(n log n) sorting on every fetch
+func _insert_job_sorted(job: ChunkJob) -> void:
+	# Find insertion point using binary search for O(log n) insertion
+	var left := 0
+	var right := pending_jobs.size()
+
+	while left < right:
+		var mid := (left + right) / 2
+		if pending_jobs[mid].priority < job.priority:
+			right = mid
+		else:
+			left = mid + 1
+
+	pending_jobs.insert(left, job)
 
 ## Get completed jobs (call from main thread)
 func get_completed_jobs(max_count: int = -1) -> Array[ChunkJob]:

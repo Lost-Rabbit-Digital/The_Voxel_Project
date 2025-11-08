@@ -81,18 +81,23 @@ func generate_chunk(chunk_pos: Vector3i) -> VoxelData:
 	var voxel_data := VoxelData.new(chunk_pos)
 	var chunk_start := chunk_pos * VoxelData.CHUNK_SIZE
 
-	# Pre-calculate heights for all XZ columns in chunk
-	var column_heights: Dictionary = {}
+	# OPTIMIZATION: Pre-calculate heights using PackedInt32Array instead of Dictionary
+	# Avoids Vector2i allocations and is cache-friendly
+	var column_heights := PackedInt32Array()
+	column_heights.resize(VoxelData.CHUNK_SIZE * VoxelData.CHUNK_SIZE)
+
 	for x in range(VoxelData.CHUNK_SIZE):
 		for z in range(VoxelData.CHUNK_SIZE):
 			var world_x := chunk_start.x + x
 			var world_z := chunk_start.z + z
-			column_heights[Vector2i(x, z)] = get_terrain_height(world_x, world_z)
+			var index := x * VoxelData.CHUNK_SIZE + z
+			column_heights[index] = get_terrain_height(world_x, world_z)
 
 	# Fill voxels
 	for x in range(VoxelData.CHUNK_SIZE):
 		for z in range(VoxelData.CHUNK_SIZE):
-			var terrain_height: int = column_heights[Vector2i(x, z)]
+			var index := x * VoxelData.CHUNK_SIZE + z
+			var terrain_height: int = column_heights[index]
 
 			for y in range(VoxelData.CHUNK_SIZE):
 				var world_x := chunk_start.x + x
@@ -115,7 +120,8 @@ func generate_chunk(chunk_pos: Vector3i) -> VoxelData:
 
 ## Get terrain height at a specific XZ position
 func get_terrain_height(world_x: int, world_z: int) -> int:
-	var cache_key := Vector2i(world_x, world_z)
+	# OPTIMIZATION: Use integer hash instead of Vector2i to avoid allocations
+	var cache_key := _hash_position(world_x, world_z)
 
 	# Check cache first (thread-safe)
 	cache_mutex.lock()
@@ -232,3 +238,12 @@ func get_world_seed() -> int:
 ## Clear height cache (useful when changing parameters)
 func clear_cache() -> void:
 	height_cache.clear()
+
+## Hash function for XZ coordinates to avoid Vector2i allocations
+## Uses cantor pairing function for perfect hashing
+func _hash_position(x: int, z: int) -> int:
+	# Cantor pairing function: uniquely maps two integers to one
+	# Handles negative numbers by offsetting to positive space
+	var a := x + 32768  # Offset to handle negative coords
+	var b := z + 32768
+	return ((a + b) * (a + b + 1)) / 2 + b
