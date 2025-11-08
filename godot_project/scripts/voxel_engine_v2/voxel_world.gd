@@ -301,13 +301,15 @@ func _update_debug_info(delta: float) -> void:
 		if chunk_manager:
 			chunk_manager.print_stats()
 
-	# LIGHTWEIGHT: Only show FPS and draw calls
+	# LIGHTWEIGHT: Only show FPS and objects in frame
 	var fps := Engine.get_frames_per_second()
-	var perf_info := Performance.get_monitor(Performance.RENDER_DRAW_CALLS_IN_FRAME)
+	var objects := Performance.get_monitor(Performance.RENDER_TOTAL_OBJECTS_IN_FRAME)
+	var draw_calls := Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME)
 
 	var debug_text := ""
 	debug_text += "FPS: %d\n" % fps
-	debug_text += "Draw Calls: %d" % perf_info
+	debug_text += "Objects: %d\n" % objects
+	debug_text += "Draw Calls: %d" % draw_calls
 
 	debug_label.text = debug_text
 
