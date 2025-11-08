@@ -84,6 +84,14 @@ func load_chunk(chunk_pos: Vector3i) -> Chunk:
 
 	var data: Dictionary = json.data
 
+	# Convert voxel_data array back to PackedByteArray if needed
+	if data.has("voxel_data") and data.voxel_data is Array:
+		var byte_array := PackedByteArray()
+		byte_array.resize(data.voxel_data.size())
+		for i in range(data.voxel_data.size()):
+			byte_array[i] = data.voxel_data[i]
+		data.voxel_data = byte_array
+
 	# Deserialize chunk
 	var chunk := Chunk.deserialize(data)
 	if chunk:
@@ -109,6 +117,15 @@ func save_chunk(chunk: Chunk) -> bool:
 
 	# Serialize chunk
 	var data := chunk.serialize()
+
+	# Convert PackedByteArray to Array for JSON compatibility
+	if data.has("voxel_data") and data.voxel_data is PackedByteArray:
+		var byte_array: PackedByteArray = data.voxel_data
+		var int_array: Array = []
+		int_array.resize(byte_array.size())
+		for i in range(byte_array.size()):
+			int_array[i] = byte_array[i]
+		data.voxel_data = int_array
 
 	# Convert to JSON
 	var json_string := JSON.stringify(data)
