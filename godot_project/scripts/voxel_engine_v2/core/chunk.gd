@@ -71,6 +71,12 @@ func cleanup() -> void:
 	for key in neighbors.keys():
 		neighbors[key] = null
 
+	# Clear any mesh-related metadata to prevent stale references
+	if has_meta("old_mesh_instance"):
+		remove_meta("old_mesh_instance")
+	if has_meta("is_rebuild"):
+		remove_meta("is_rebuild")
+
 	# Note: We keep voxel_data allocated for reuse
 	# Note: Mesh instance is managed by ChunkManager
 
