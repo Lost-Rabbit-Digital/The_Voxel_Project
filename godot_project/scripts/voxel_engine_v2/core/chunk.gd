@@ -176,7 +176,27 @@ static func deserialize(data: Dictionary) -> Chunk:
 	var pos: Dictionary = data.get("position", {"x": 0, "y": 0, "z": 0})
 	chunk.position = Vector3i(pos.x, pos.y, pos.z)
 
-	var voxel_bytes: PackedByteArray = data.get("voxel_data", PackedByteArray())
+	# Handle voxel_data which could be in different formats due to JSON serialization
+	var voxel_data_raw = data.get("voxel_data", PackedByteArray())
+	var voxel_bytes := PackedByteArray()
+
+	if voxel_data_raw is PackedByteArray:
+		# Already in correct format
+		voxel_bytes = voxel_data_raw
+	elif voxel_data_raw is Array:
+		# Convert Array to PackedByteArray (from JSON)
+		voxel_bytes.resize(voxel_data_raw.size())
+		for i in range(voxel_data_raw.size()):
+			voxel_bytes[i] = voxel_data_raw[i]
+	elif voxel_data_raw is String:
+		# Old format - invalid, skip (will regenerate chunk)
+		print("[Chunk] Warning: Old cache format detected for chunk %s, skipping" % chunk.position)
+		voxel_bytes = PackedByteArray()
+	else:
+		# Unknown format
+		print("[Chunk] Error: Unknown voxel_data format: %s" % type_string(typeof(voxel_data_raw)))
+		voxel_bytes = PackedByteArray()
+
 	chunk.voxel_data = VoxelData.deserialize(voxel_bytes, chunk.position)
 
 	return chunk
