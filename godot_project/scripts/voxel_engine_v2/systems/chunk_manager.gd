@@ -858,6 +858,35 @@ func _clear_chunk_neighbors(chunk_pos: Vector3i) -> void:
 ## Called when a new chunk is loaded to ensure proper face culling at boundaries
 ## Now uses batched rebuilds to prevent duplicate work in the same frame
 func _rebuild_neighbor_meshes(chunk_pos: Vector3i) -> void:
+	# OPTIMIZATION: In region batching mode, don't rebuild individual chunk meshes!
+	# Instead, mark the affected neighbor regions as dirty
+	if enable_region_batching:
+		var neighbor_offsets := {
+			"north": Vector3i(0, 0, 1),
+			"south": Vector3i(0, 0, -1),
+			"east": Vector3i(1, 0, 0),
+			"west": Vector3i(-1, 0, 0),
+			"up": Vector3i(0, 1, 0),
+			"down": Vector3i(0, -1, 0)
+		}
+
+		for direction in neighbor_offsets.keys():
+			var neighbor_pos: Vector3i = chunk_pos + neighbor_offsets[direction]
+			if neighbor_pos in active_chunks:
+				# Mark the neighbor chunk's cached mesh arrays as invalid
+				var neighbor: Chunk = active_chunks[neighbor_pos]
+				if neighbor and neighbor.state == Chunk.State.ACTIVE:
+					neighbor.cached_mesh_arrays.clear()
+
+				# Mark the region containing this neighbor as dirty
+				var neighbor_region_pos := ChunkRegion.chunk_to_region_position(neighbor_pos)
+				if neighbor_region_pos in active_regions:
+					var region: ChunkRegion = active_regions[neighbor_region_pos]
+					if region:
+						region.mark_dirty()
+		return
+
+	# Traditional mode: Queue individual chunk mesh rebuilds
 	var neighbor_offsets := {
 		"north": Vector3i(0, 0, 1),
 		"south": Vector3i(0, 0, -1),
@@ -880,6 +909,10 @@ func _rebuild_neighbor_meshes(chunk_pos: Vector3i) -> void:
 ## Process batched neighbor rebuilds
 ## Processes up to a limited number per frame to avoid FPS spikes
 func _process_pending_neighbor_rebuilds() -> void:
+	# Not used in region batching mode
+	if enable_region_batching:
+		return
+
 	if pending_neighbor_rebuilds.is_empty():
 		return
 
