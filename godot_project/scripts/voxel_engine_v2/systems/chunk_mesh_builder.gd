@@ -47,7 +47,8 @@ func build_mesh(chunk: Chunk) -> MeshInstance3D:
 		print("[MeshBuilder] Chunk %s is empty, skipping mesh" % chunk.position)
 		return null
 
-	print("[MeshBuilder] Building greedy mesh for chunk %s..." % chunk.position)
+	# Reduce console spam - only print occasionally
+	# print("[MeshBuilder] Building greedy mesh for chunk %s..." % chunk.position)
 
 	# Create surface tool for mesh building
 	var st := SurfaceTool.new()
@@ -72,7 +73,8 @@ func build_mesh(chunk: Chunk) -> MeshInstance3D:
 		vertices_added += result.vertices
 		quads_added += result.quads
 
-	print("[MeshBuilder]   Added %d vertices in %d merged quads" % [vertices_added, quads_added])
+	# Reduce console spam
+	# print("[MeshBuilder]   Added %d vertices in %d merged quads" % [vertices_added, quads_added])
 
 	# Check if we have any geometry
 	if vertices_added == 0:
@@ -90,7 +92,8 @@ func build_mesh(chunk: Chunk) -> MeshInstance3D:
 	# Enable shadow casting
 	mesh_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 
-	print("[MeshBuilder] ✓ Greedy mesh created successfully")
+	# Reduce console spam
+	# print("[MeshBuilder] ✓ Greedy mesh created successfully")
 	return mesh_instance
 
 ## Add visible faces for a single voxel

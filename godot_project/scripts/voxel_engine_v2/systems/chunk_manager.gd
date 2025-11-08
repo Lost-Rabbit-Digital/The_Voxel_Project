@@ -144,28 +144,29 @@ func load_chunk(chunk_pos: Vector3i) -> Chunk:
 		print("[ChunkManager] Chunk %s already loaded, skipping" % chunk_pos)
 		return active_chunks[chunk_pos]
 
-	print("[ChunkManager] Loading chunk at %s..." % chunk_pos)
+	# Reduce console spam - only log warnings
+	# print("[ChunkManager] Loading chunk at %s..." % chunk_pos)
 
 	# Get chunk from pool or create new
 	var chunk := _get_chunk_from_pool()
-	print("[ChunkManager]   Got chunk from pool (pooled: %d)" % chunk_pool.size())
+	# print("[ChunkManager]   Got chunk from pool (pooled: %d)" % chunk_pool.size())
 	chunk.initialize(chunk_pos)
 	chunk.state = Chunk.State.GENERATING
 
 	# Generate terrain data
 	if terrain_generator:
-		print("[ChunkManager]   Generating terrain...")
+		# print("[ChunkManager]   Generating terrain...")
 		chunk.voxel_data = terrain_generator.generate_chunk(chunk_pos)
 		stats_chunks_generated += 1
-		var solid_count := chunk.voxel_data.count_solid_voxels()
-		print("[ChunkManager]   Generated %d solid voxels" % solid_count)
+		# var solid_count := chunk.voxel_data.count_solid_voxels()
+		# print("[ChunkManager]   Generated %d solid voxels" % solid_count)
 	else:
 		print("[ChunkManager]   WARNING: No terrain generator, using test pattern")
 		_generate_test_chunk(chunk)
 
 	# Skip empty chunks
 	if chunk.is_empty():
-		print("[ChunkManager]   Chunk is empty, returning to pool")
+		# print("[ChunkManager]   Chunk is empty, returning to pool")
 		_return_chunk_to_pool(chunk)
 		return null
 
@@ -174,34 +175,37 @@ func load_chunk(chunk_pos: Vector3i) -> Chunk:
 
 	# Update neighbor references BEFORE building mesh
 	# This allows proper face culling at chunk boundaries
-	print("[ChunkManager]   Updating neighbor references...")
+	# print("[ChunkManager]   Updating neighbor references...")
 	_update_chunk_neighbors(chunk_pos, chunk)
 
 	# Generate mesh
 	chunk.state = Chunk.State.MESHING
 	if mesh_builder:
-		print("[ChunkManager]   Building mesh...")
+		# print("[ChunkManager]   Building mesh...")
 		var mesh_instance: MeshInstance3D = mesh_builder.build_mesh(chunk)
 		if mesh_instance:
 			chunk.mesh_instance = mesh_instance
 			mesh_instance.position = chunk.get_world_position()
 			add_child(mesh_instance)
 			stats_chunks_meshed += 1
-			var vertex_count := mesh_instance.mesh.get_surface_count() if mesh_instance.mesh else 0
-			print("[ChunkManager]   Mesh built with %d surfaces" % vertex_count)
+			# var vertex_count := mesh_instance.mesh.get_surface_count() if mesh_instance.mesh else 0
+			# print("[ChunkManager]   Mesh built with %d surfaces" % vertex_count)
 		else:
 			print("[ChunkManager]   WARNING: Mesh builder returned null")
 	else:
 		print("[ChunkManager]   WARNING: No mesh builder available")
 
-	# Rebuild meshes of neighboring chunks (they now have a new neighbor)
-	print("[ChunkManager]   Rebuilding neighboring chunk meshes...")
-	_rebuild_neighbor_meshes(chunk_pos)
+	# Skip neighbor mesh rebuilds - greedy meshing already handles cross-chunk culling
+	# via _should_add_face() which checks neighboring chunks
+	# Rebuilding neighbors on every load causes massive performance issues
+	# print("[ChunkManager]   Rebuilding neighboring chunk meshes...")
+	# _rebuild_neighbor_meshes(chunk_pos)
 
 	# Activate chunk
 	chunk.state = Chunk.State.ACTIVE
 
-	print("[ChunkManager] ✓ Chunk %s loaded successfully" % chunk_pos)
+	# Reduce console spam
+	# print("[ChunkManager] ✓ Chunk %s loaded successfully" % chunk_pos)
 	return chunk
 
 ## Unload a chunk at the given position
@@ -224,8 +228,9 @@ func unload_chunk(chunk_pos: Vector3i) -> void:
 	# Remove from active chunks
 	active_chunks.erase(chunk_pos)
 
-	# Rebuild neighboring chunks (they may need to show faces that were previously culled)
-	_rebuild_neighbor_meshes(chunk_pos)
+	# Skip neighbor mesh rebuilds - causes too many cascading rebuilds
+	# When a chunk is unloaded, neighbors will naturally rebuild when updated
+	# _rebuild_neighbor_meshes(chunk_pos)
 
 	# Return to pool
 	_return_chunk_to_pool(chunk)
