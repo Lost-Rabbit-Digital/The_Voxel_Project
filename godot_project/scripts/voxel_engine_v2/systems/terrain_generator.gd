@@ -25,6 +25,9 @@ var world_seed: int = 0
 var height_cache: Dictionary = {}
 const MAX_CACHE_SIZE: int = 2000
 
+## Mutex for thread-safe cache access
+var cache_mutex: Mutex = Mutex.new()
+
 func _init(seed_value: int = 0) -> void:
 	print("[TerrainGenerator] Initializing with seed: %d" % seed_value)
 	if seed_value == 0:
@@ -114,9 +117,13 @@ func generate_chunk(chunk_pos: Vector3i) -> VoxelData:
 func get_terrain_height(world_x: int, world_z: int) -> int:
 	var cache_key := Vector2i(world_x, world_z)
 
-	# Check cache first
-	if cache_key in height_cache:
-		return height_cache[cache_key]
+	# Check cache first (thread-safe)
+	cache_mutex.lock()
+	var cached_height: Variant = height_cache.get(cache_key)
+	cache_mutex.unlock()
+
+	if cached_height != null:
+		return cached_height
 
 	# Calculate using layered noise
 	var continent_value := continent_noise.get_noise_2d(world_x, world_z)
@@ -132,8 +139,10 @@ func get_terrain_height(world_x: int, world_z: int) -> int:
 	# Clamp to reasonable values
 	height = clampi(height, 0, 255)
 
-	# Cache the result
+	# Cache the result (thread-safe)
+	cache_mutex.lock()
 	height_cache[cache_key] = height
+	cache_mutex.unlock()
 
 	return height
 
@@ -200,16 +209,20 @@ func _generate_ore(world_pos: Vector3i, y: int) -> int:
 
 ## Clear old entries from height cache
 func _clear_old_cache_entries() -> void:
+	cache_mutex.lock()
 	var keys := height_cache.keys()
 	var to_remove := keys.size() - MAX_CACHE_SIZE / 2
 
 	for i in range(to_remove):
 		height_cache.erase(keys[i])
+	cache_mutex.unlock()
 
 ## Set new world seed (clears cache)
 func set_world_seed(new_seed: int) -> void:
 	world_seed = new_seed
+	cache_mutex.lock()
 	height_cache.clear()
+	cache_mutex.unlock()
 	_setup_noise_generators()
 
 ## Get current world seed
