@@ -187,10 +187,10 @@ func _process(delta: float) -> void:
 
 ## Log detailed performance breakdown
 func _log_performance_breakdown(delta: float, pos_time: float, chunk_time: float, culling_time: float, debug_time: float, frame_time: float) -> void:
-	var fps := 1.0 / delta if delta > 0 else 0
-	var avg_frame := 0.0
-	var max_frame := 0.0
-	var min_frame := 999.0
+	var fps: float = 1.0 / delta if delta > 0 else 0.0
+	var avg_frame: float = 0.0
+	var max_frame: float = 0.0
+	var min_frame: float = 999.0
 
 	for t in _frame_times:
 		avg_frame += t
