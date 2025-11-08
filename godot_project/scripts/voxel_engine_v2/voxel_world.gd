@@ -34,6 +34,7 @@ var player_node: Node3D
 
 ## Debug
 var debug_label: Label
+var axis_gizmo: AxisGizmo
 var stats_timer: float = 0.0
 
 func _ready() -> void:
@@ -134,6 +135,10 @@ func _setup_debug_ui() -> void:
 	debug_label.add_theme_font_size_override("font_size", 14)
 	add_child(debug_label)
 
+	# Add axis gizmo (3D orientation indicator)
+	axis_gizmo = AxisGizmo.new()
+	add_child(axis_gizmo)
+
 ## Update debug information display
 func _update_debug_info(delta: float) -> void:
 	if not debug_label:
@@ -230,3 +235,5 @@ func debug_toggle_info() -> void:
 	show_debug_info = not show_debug_info
 	if debug_label:
 		debug_label.visible = show_debug_info
+	if axis_gizmo:
+		axis_gizmo.visible = show_debug_info
