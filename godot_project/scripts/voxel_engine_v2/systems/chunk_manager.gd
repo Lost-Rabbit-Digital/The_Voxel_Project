@@ -145,42 +145,25 @@ func update_chunks(player_position: Vector3, camera_forward: Vector3 = Vector3.F
 		_process_load_queue()
 		return
 
-	print("[ChunkManager] Player moved %.1f units, updating chunks..." % distance)
 	last_update_position = player_position
 	tracked_position = player_position
 
 	# Get player's chunk position
 	var player_chunk_pos := world_to_chunk_position(player_position)
-	print("[ChunkManager] Player chunk position: %s" % player_chunk_pos)
 
 	# Determine which chunks should be loaded
 	var needed_chunks: Dictionary = {}
 	_calculate_needed_chunks(player_chunk_pos, needed_chunks)
-	print("[ChunkManager] Calculated %d chunks needed" % needed_chunks.size())
 
 	# Remove chunks that are too far
-	var chunks_before := active_chunks.size()
 	_unload_distant_chunks(needed_chunks)
-	var chunks_unloaded := chunks_before - active_chunks.size()
-	if chunks_unloaded > 0:
-		print("[ChunkManager] Unloaded %d chunks" % chunks_unloaded)
 
 	# Load new chunks with prioritization
-	chunks_before = active_chunks.size()
 	_load_new_chunks_prioritized(needed_chunks, player_position, camera_forward)
-	var chunks_loaded := active_chunks.size() - chunks_before
-	if chunks_loaded > 0:
-		print("[ChunkManager] Loaded %d new chunks" % chunks_loaded)
 
 	# Update stats
 	stats_active_chunks = active_chunks.size()
 	stats_pooled_chunks = chunk_pool.size()
-	print("[ChunkManager] Active: %d, Pooled: %d, Total generated: %d, Total meshed: %d" % [
-		stats_active_chunks,
-		stats_pooled_chunks,
-		stats_chunks_generated,
-		stats_chunks_meshed
-	])
 
 ## Process completed threaded jobs each frame
 func _process(delta: float) -> void:
@@ -211,13 +194,12 @@ func _on_generation_completed(job) -> void:
 
 	# Check for errors
 	if job.error:
-		print("[ChunkManager] Generation error for chunk %s: %s" % [chunk_pos, job.error])
+		push_error("[ChunkManager] Generation error for chunk %s: %s" % [chunk_pos, job.error])
 		return
 
 	# Get generated voxel data
 	var voxel_data: VoxelData = job.result
 	if not voxel_data:
-		print("[ChunkManager] No voxel data generated for chunk %s" % chunk_pos)
 		return
 
 	# Check if chunk is empty
@@ -278,7 +260,7 @@ func _on_meshing_completed(job) -> void:
 
 	# Check for errors
 	if job.error:
-		print("[ChunkManager] Meshing error for chunk %s: %s" % [chunk_pos, job.error])
+		push_error("[ChunkManager] Meshing error for chunk %s: %s" % [chunk_pos, job.error])
 		return
 
 	# Get mesh data
@@ -521,9 +503,6 @@ func _load_new_chunks_prioritized(needed_chunks: Dictionary, player_position: Ve
 			# Add remaining chunks to queue for next frame
 			load_queue.append(chunk_pos)
 
-	if not load_queue.is_empty():
-		print("[ChunkManager] %d chunks queued for later loading" % load_queue.size())
-
 ## Process pending chunks from the load queue
 func _process_load_queue() -> void:
 	if load_queue.is_empty():
@@ -665,19 +644,12 @@ func _load_chunk_sync(chunk_pos: Vector3i) -> Chunk:
 	if mesh_builder:
 		# Only create individual mesh instances if region batching is disabled
 		if not enable_region_batching:
-			# print("[ChunkManager]   Building mesh...")
 			var mesh_instance: MeshInstance3D = mesh_builder.build_mesh(chunk)
 			if mesh_instance:
 				chunk.mesh_instance = mesh_instance
 				mesh_instance.position = chunk.get_world_position()
 				add_child(mesh_instance)
 				stats_chunks_meshed += 1
-				# var vertex_count := mesh_instance.mesh.get_surface_count() if mesh_instance.mesh else 0
-				# print("[ChunkManager]   Mesh built with %d surfaces" % vertex_count)
-			else:
-				print("[ChunkManager]   WARNING: Mesh builder returned null")
-	else:
-		print("[ChunkManager]   WARNING: No mesh builder available")
 
 	# Activate chunk
 	chunk.state = Chunk.State.ACTIVE
@@ -996,7 +968,6 @@ func _check_initial_chunks_ready() -> void:
 	# Emit signal once we have enough chunks
 	if active_count >= INITIAL_CHUNKS_THRESHOLD:
 		_initial_chunks_ready = true
-		print("[ChunkManager] Initial chunks ready! (%d active chunks)" % active_count)
 		initial_chunks_ready.emit()
 
 ## Cleanup all chunks

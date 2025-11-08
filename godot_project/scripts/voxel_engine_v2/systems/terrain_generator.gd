@@ -1,25 +1,18 @@
-## TerrainGenerator - Generates terrain using multi-layer Perlin noise
-## Creates interesting, varied terrain with hills, valleys, and caves
+## TerrainGenerator - Simple, fast terrain generation
+## Basic heightmap-based terrain with hills and valleys
 class_name TerrainGenerator
 extends RefCounted
 
-## Noise generators for different scales
-var continent_noise: FastNoiseLite  # Large-scale land masses
-var terrain_noise: FastNoiseLite    # Medium-scale hills and valleys
-var detail_noise: FastNoiseLite     # Small-scale variation
-var cave_noise: FastNoiseLite       # 3D caves
+## Single noise generator for terrain
+var terrain_noise: FastNoiseLite
 
 ## World seed for consistent generation
 var world_seed: int = 0
 
 ## Terrain parameters
 @export var base_height: int = 64           # Sea level
-@export var height_scale: float = 32.0     # Max terrain height variation
-@export var continent_frequency: float = 0.0005  # Very large features
-@export var terrain_frequency: float = 0.02      # Hills and valleys
-@export var detail_frequency: float = 0.08       # Small bumps
-@export var cave_frequency: float = 0.05         # Cave size
-@export var cave_threshold: float = 0.6          # Cave density (higher = more caves)
+@export var height_scale: float = 24.0     # Max terrain height variation
+@export var terrain_frequency: float = 0.015  # Terrain features scale
 
 ## Height cache for performance (avoid recalculating same columns)
 var height_cache: Dictionary = {}
@@ -29,55 +22,24 @@ const MAX_CACHE_SIZE: int = 2000
 var cache_mutex: Mutex = Mutex.new()
 
 func _init(seed_value: int = 0) -> void:
-	print("[TerrainGenerator] Initializing with seed: %d" % seed_value)
 	if seed_value == 0:
 		seed_value = randi()
-		print("[TerrainGenerator] Generated random seed: %d" % seed_value)
-
 	world_seed = seed_value
-	print("[TerrainGenerator] Setting up noise generators...")
 	_setup_noise_generators()
-	print("[TerrainGenerator] Noise generators ready")
 
-## Initialize all noise generators with seed
+## Initialize noise generator with seed
 func _setup_noise_generators() -> void:
-	# Continent noise - very large scale features
-	continent_noise = FastNoiseLite.new()
-	continent_noise.seed = world_seed
-	continent_noise.noise_type = FastNoiseLite.TYPE_PERLIN
-	continent_noise.frequency = continent_frequency
-	continent_noise.fractal_octaves = 2
-	continent_noise.fractal_lacunarity = 2.0
-	continent_noise.fractal_gain = 0.5
-
-	# Terrain noise - hills and valleys
+	# Simple terrain noise
 	terrain_noise = FastNoiseLite.new()
-	terrain_noise.seed = world_seed + 1
+	terrain_noise.seed = world_seed
 	terrain_noise.noise_type = FastNoiseLite.TYPE_PERLIN
 	terrain_noise.frequency = terrain_frequency
-	terrain_noise.fractal_octaves = 4
+	terrain_noise.fractal_octaves = 2  # Reduced from 4 for speed
 	terrain_noise.fractal_lacunarity = 2.0
 	terrain_noise.fractal_gain = 0.5
 
-	# Detail noise - small variations
-	detail_noise = FastNoiseLite.new()
-	detail_noise.seed = world_seed + 2
-	detail_noise.noise_type = FastNoiseLite.TYPE_SIMPLEX
-	detail_noise.frequency = detail_frequency
-	detail_noise.fractal_octaves = 2
-	detail_noise.fractal_lacunarity = 2.0
-	detail_noise.fractal_gain = 0.5
-
-	# Cave noise - 3D Perlin for caves
-	cave_noise = FastNoiseLite.new()
-	cave_noise.seed = world_seed + 3
-	cave_noise.noise_type = FastNoiseLite.TYPE_PERLIN
-	cave_noise.frequency = cave_frequency
-	cave_noise.fractal_octaves = 2
-
 ## Generate a complete chunk of voxel data
 func generate_chunk(chunk_pos: Vector3i) -> VoxelData:
-	print("[TerrainGen] Generating chunk %s..." % chunk_pos)
 	var voxel_data := VoxelData.new(chunk_pos)
 
 	# Calculate chunk world position (handle adaptive Y sizing)
@@ -142,16 +104,11 @@ func get_terrain_height(world_x: int, world_z: int) -> int:
 	if cached_height != null:
 		return cached_height
 
-	# Calculate using layered noise
-	var continent_value := continent_noise.get_noise_2d(world_x, world_z)
-	var terrain_value := terrain_noise.get_noise_2d(world_x, world_z)
-	var detail_value := detail_noise.get_noise_2d(world_x, world_z)
-
-	# Combine noise layers with different weights
-	var combined := continent_value * 0.5 + terrain_value * 0.35 + detail_value * 0.15
+	# Simple single-layer noise
+	var noise_value := terrain_noise.get_noise_2d(world_x, world_z)
 
 	# Convert to height (-1 to 1 -> height range)
-	var height := int(base_height + combined * height_scale)
+	var height := int(base_height + noise_value * height_scale)
 
 	# Clamp to reasonable values
 	height = clampi(height, 0, 255)
@@ -171,57 +128,15 @@ func _get_voxel_at_position(world_pos: Vector3i, terrain_height: int) -> int:
 	if y > terrain_height:
 		return VoxelTypes.Type.AIR
 
-	# Check for caves underground
-	if y < terrain_height - 5:
-		var cave_value := cave_noise.get_noise_3d(
-			world_pos.x,
-			world_pos.y,
-			world_pos.z
-		)
-
-		# Create cave if noise value is above threshold
-		if cave_value > cave_threshold:
-			return VoxelTypes.Type.AIR
-
 	# At surface - grass
 	if y == terrain_height:
 		return VoxelTypes.Type.GRASS
 
-	# Just below surface - dirt (3-4 blocks)
-	if y > terrain_height - 4:
+	# Just below surface - dirt (3 blocks)
+	if y > terrain_height - 3:
 		return VoxelTypes.Type.DIRT
 
-	# Check for ores in stone layer
-	if y < terrain_height - 4:
-		var ore_type := _generate_ore(world_pos, y)
-		if ore_type != VoxelTypes.Type.STONE:
-			return ore_type
-
 	# Default - stone
-	return VoxelTypes.Type.STONE
-
-## Generate ore veins at specific positions
-func _generate_ore(world_pos: Vector3i, y: int) -> int:
-	# Use a separate noise for ore distribution
-	var ore_noise_value := detail_noise.get_noise_3d(
-		world_pos.x * 0.5,
-		world_pos.y * 0.5,
-		world_pos.z * 0.5
-	)
-
-	# Coal ore (common, anywhere underground)
-	if ore_noise_value > 0.85 and y < base_height:
-		return VoxelTypes.Type.COAL_ORE
-
-	# Iron ore (less common, medium depth)
-	if ore_noise_value > 0.90 and y < base_height - 20:
-		return VoxelTypes.Type.IRON_ORE
-
-	# Gold ore (rare, deep)
-	if ore_noise_value > 0.95 and y < base_height - 40:
-		return VoxelTypes.Type.GOLD_ORE
-
-	# Default to stone
 	return VoxelTypes.Type.STONE
 
 ## Clear old entries from height cache

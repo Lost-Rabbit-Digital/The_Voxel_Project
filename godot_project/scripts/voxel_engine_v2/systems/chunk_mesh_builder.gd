@@ -24,10 +24,8 @@ var default_material: StandardMaterial3D
 var chunk_manager: ChunkManager
 
 func _init(manager: ChunkManager = null) -> void:
-	print("[MeshBuilder] Initializing...")
 	chunk_manager = manager
 	_create_default_material()
-	print("[MeshBuilder] Ready")
 
 ## Create a simple default material for testing
 func _create_default_material() -> void:
@@ -39,12 +37,11 @@ func _create_default_material() -> void:
 ## Build mesh for a chunk using greedy meshing
 func build_mesh(chunk: Chunk) -> MeshInstance3D:
 	if not chunk or not chunk.voxel_data:
-		print("[MeshBuilder] ERROR: Invalid chunk or voxel data")
+		push_error("[MeshBuilder] ERROR: Invalid chunk or voxel data")
 		return null
 
 	# Skip empty chunks
 	if chunk.is_empty():
-		print("[MeshBuilder] Chunk %s is empty, skipping mesh" % chunk.position)
 		return null
 
 	# Reduce console spam - only print occasionally
@@ -73,12 +70,8 @@ func build_mesh(chunk: Chunk) -> MeshInstance3D:
 		vertices_added += result.vertices
 		quads_added += result.quads
 
-	# Reduce console spam
-	# print("[MeshBuilder]   Added %d vertices in %d merged quads" % [vertices_added, quads_added])
-
 	# Check if we have any geometry
 	if vertices_added == 0:
-		print("[MeshBuilder] No vertices to mesh, returning null")
 		return null
 
 	# Index the mesh for optimization
