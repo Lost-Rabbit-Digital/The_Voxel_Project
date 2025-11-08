@@ -175,23 +175,28 @@ func _get_neighbor_chunk(chunk: Chunk, direction: Vector3i) -> Chunk:
 		return chunk.get_neighbor("west")
 	return null
 
-## Get a simple color for a voxel type (temporary, will be replaced with textures)
-func _get_voxel_color(voxel_type: int) -> Color:
-	match voxel_type:
-		VoxelTypes.Type.GRASS:
-			return Color(0.3, 0.7, 0.3)
-		VoxelTypes.Type.DIRT:
-			return Color(0.5, 0.3, 0.2)
-		VoxelTypes.Type.STONE:
-			return Color(0.5, 0.5, 0.5)
-		VoxelTypes.Type.WOOD:
-			return Color(0.4, 0.25, 0.1)
-		VoxelTypes.Type.SAND:
-			return Color(0.9, 0.85, 0.6)
-		VoxelTypes.Type.COBBLESTONE:
-			return Color(0.4, 0.4, 0.4)
-		_:
-			return Color(1.0, 0.0, 1.0)  # Magenta for unknown types
+## Get a pastel color based on y-level (height-based coloring)
+func _get_color_for_y_level(y_pos: float) -> Color:
+	# Normalize y position to 0-1 range (assuming terrain between y=0 and y=128)
+	var normalized_y := clamp(y_pos / 128.0, 0.0, 1.0)
+
+	# Create pastel gradient from bottom to top
+	# Low elevations: pastel blue-green (water/low areas)
+	# Mid elevations: pastel green-yellow (plains/hills)
+	# High elevations: pastel pink-purple (mountains/peaks)
+
+	if normalized_y < 0.33:
+		# Bottom third: pastel aqua to mint green
+		var t := normalized_y / 0.33
+		return Color(0.7, 0.9, 0.85).lerp(Color(0.75, 0.95, 0.75), t)
+	elif normalized_y < 0.66:
+		# Middle third: mint green to pastel yellow
+		var t := (normalized_y - 0.33) / 0.33
+		return Color(0.75, 0.95, 0.75).lerp(Color(0.95, 0.95, 0.7), t)
+	else:
+		# Top third: pastel yellow to pastel pink-purple
+		var t := (normalized_y - 0.66) / 0.34
+		return Color(0.95, 0.95, 0.7).lerp(Color(0.95, 0.75, 0.9), t)
 
 ## Add a quad (two triangles) with color
 ## Vertices should be in counter-clockwise order when viewed from outside
@@ -222,7 +227,7 @@ func _add_top_face(st: SurfaceTool, pos: Vector3, voxel_type: int) -> void:
 		pos + Vector3(VOXEL_SIZE, VOXEL_SIZE, VOXEL_SIZE), # front-right
 		pos + Vector3(0, VOXEL_SIZE, VOXEL_SIZE)       # front-left
 	])
-	var color := _get_voxel_color(voxel_type)
+	var color := _get_color_for_y_level(pos.y)
 	_add_quad(st, vertices, Vector3.UP, color * 1.0)  # Brightest (facing sky)
 
 ## Bottom face (-Y) - looking up from below, vertices are counter-clockwise
@@ -233,7 +238,7 @@ func _add_bottom_face(st: SurfaceTool, pos: Vector3, voxel_type: int) -> void:
 		pos + Vector3(VOXEL_SIZE, 0, VOXEL_SIZE), # front-right
 		pos + Vector3(VOXEL_SIZE, 0, 0)       # back-right
 	])
-	var color := _get_voxel_color(voxel_type)
+	var color := _get_color_for_y_level(pos.y)
 	_add_quad(st, vertices, Vector3.DOWN, color * 0.6)  # Darker (shadow)
 
 ## North face (+Z) - looking from front, vertices are counter-clockwise
@@ -244,7 +249,7 @@ func _add_north_face(st: SurfaceTool, pos: Vector3, voxel_type: int) -> void:
 		pos + Vector3(VOXEL_SIZE, VOXEL_SIZE, VOXEL_SIZE), # top-right
 		pos + Vector3(VOXEL_SIZE, 0, VOXEL_SIZE)       # bottom-right
 	])
-	var color := _get_voxel_color(voxel_type)
+	var color := _get_color_for_y_level(pos.y)
 	_add_quad(st, vertices, Vector3.FORWARD, color * 0.85)  # Slightly shaded
 
 ## South face (-Z) - looking from back, vertices are counter-clockwise
@@ -255,7 +260,7 @@ func _add_south_face(st: SurfaceTool, pos: Vector3, voxel_type: int) -> void:
 		pos + Vector3(0, VOXEL_SIZE, 0),      # top-left
 		pos + Vector3(0, 0, 0)                # bottom-left
 	])
-	var color := _get_voxel_color(voxel_type)
+	var color := _get_color_for_y_level(pos.y)
 	_add_quad(st, vertices, Vector3.BACK, color * 0.85)  # Slightly shaded
 
 ## East face (+X) - looking from right side, vertices are counter-clockwise
@@ -266,7 +271,7 @@ func _add_east_face(st: SurfaceTool, pos: Vector3, voxel_type: int) -> void:
 		pos + Vector3(VOXEL_SIZE, VOXEL_SIZE, 0),  # top-back
 		pos + Vector3(VOXEL_SIZE, 0, 0)            # bottom-back
 	])
-	var color := _get_voxel_color(voxel_type)
+	var color := _get_color_for_y_level(pos.y)
 	_add_quad(st, vertices, Vector3.RIGHT, color * 0.75)  # Medium shade
 
 ## West face (-X) - looking from left side, vertices are counter-clockwise
@@ -277,5 +282,5 @@ func _add_west_face(st: SurfaceTool, pos: Vector3, voxel_type: int) -> void:
 		pos + Vector3(0, VOXEL_SIZE, VOXEL_SIZE), # top-front
 		pos + Vector3(0, 0, VOXEL_SIZE)    # bottom-front
 	])
-	var color := _get_voxel_color(voxel_type)
+	var color := _get_color_for_y_level(pos.y)
 	_add_quad(st, vertices, Vector3.LEFT, color * 0.75)  # Medium shade
