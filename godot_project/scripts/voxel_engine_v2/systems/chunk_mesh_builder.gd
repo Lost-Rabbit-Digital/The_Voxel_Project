@@ -96,6 +96,66 @@ func build_mesh(chunk: Chunk) -> MeshInstance3D:
 	# print("[MeshBuilder] ✓ Greedy mesh created successfully")
 	return mesh_instance
 
+## Build mesh data for a chunk (thread-safe version)
+## Returns mesh data as a Dictionary that can be converted to MeshInstance3D on main thread
+func build_mesh_data(chunk: Chunk) -> Dictionary:
+	if not chunk or not chunk.voxel_data:
+		return {}
+
+	# Skip empty chunks
+	if chunk.is_empty():
+		return {}
+
+	# Create surface tool for mesh building
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+
+	var vertices_added := 0
+	var quads_added := 0
+
+	# Process each axis direction for greedy meshing
+	var directions := [
+		{"axis": Vector3i.UP, "name": "up"},
+		{"axis": Vector3i.DOWN, "name": "down"},
+		{"axis": Vector3i.FORWARD, "name": "forward"},
+		{"axis": Vector3i.BACK, "name": "back"},
+		{"axis": Vector3i.RIGHT, "name": "right"},
+		{"axis": Vector3i.LEFT, "name": "left"}
+	]
+
+	for dir_info in directions:
+		var result := _greedy_mesh_direction(st, chunk, dir_info.axis)
+		vertices_added += result.vertices
+		quads_added += result.quads
+
+	# Check if we have any geometry
+	if vertices_added == 0:
+		return {}
+
+	# Index the mesh for optimization
+	st.index()
+
+	# Commit to mesh and return data
+	var mesh := st.commit()
+
+	return {
+		"mesh": mesh,
+		"vertices": vertices_added,
+		"quads": quads_added
+	}
+
+## Create MeshInstance3D from mesh data (call on main thread)
+func create_mesh_instance_from_data(mesh_data: Dictionary) -> MeshInstance3D:
+	if mesh_data.is_empty() or not mesh_data.has("mesh"):
+		return null
+
+	var mesh_instance := MeshInstance3D.new()
+	mesh_instance.mesh = mesh_data.mesh
+	mesh_instance.material_override = default_material
+	mesh_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+
+	return mesh_instance
+
 ## Add visible faces for a single voxel
 ## Returns the number of vertices added (6 per face)
 func _add_voxel_faces(st: SurfaceTool, chunk: Chunk, local_pos: Vector3i, voxel_type: int) -> int:

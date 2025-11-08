@@ -223,9 +223,18 @@ func _update_debug_info(delta: float) -> void:
 	debug_text += "\n"
 	debug_text += "Active Chunks: %d\n" % stats.get("active_chunks", 0)
 	debug_text += "Pooled Chunks: %d\n" % stats.get("pooled_chunks", 0)
+	debug_text += "Generating: %d\n" % stats.get("generating_chunks", 0)
+	debug_text += "Meshing: %d\n" % stats.get("meshing_chunks", 0)
 	debug_text += "Generated: %d\n" % stats.get("chunks_generated", 0)
 	debug_text += "Meshed: %d\n" % stats.get("chunks_meshed", 0)
 	debug_text += "\n"
+
+	# Add threading stats if enabled
+	if stats.get("threading_enabled", false):
+		debug_text += "Workers: %d\n" % stats.get("worker_count", 0)
+		debug_text += "Pending Jobs: %d\n" % stats.get("pending_jobs", 0)
+		debug_text += "Completed Jobs: %d\n" % stats.get("completed_jobs", 0)
+		debug_text += "\n"
 
 	# Add cache stats if enabled
 	if stats.get("cache_enabled", false):

@@ -11,6 +11,9 @@ extends Node3D
 @export var pool_size: int = 128
 @export var enable_chunk_cache: bool = true
 @export var cache_size_limit_mb: int = 500
+@export var enable_threading: bool = true
+@export var worker_thread_count: int = 4
+@export var max_jobs_per_frame: int = 8
 
 ## Active chunks in the world (Vector3i chunk_pos -> Chunk)
 var active_chunks: Dictionary = {}
@@ -20,6 +23,12 @@ var chunk_pool: Array[Chunk] = []
 
 ## Chunks pending loading (Vector3i -> priority)
 var load_queue: Array[Vector3i] = []
+
+## Chunks currently being generated (Vector3i -> true)
+var generating_chunks: Dictionary = {}
+
+## Chunks currently being meshed (Vector3i -> Chunk)
+var meshing_chunks: Dictionary = {}
 
 ## Last player position used for chunk updates
 var last_update_position: Vector3 = Vector3.ZERO
@@ -34,6 +43,7 @@ const MAX_CHUNKS_PER_FRAME: int = 4
 var terrain_generator = null
 var mesh_builder = null
 var chunk_cache: ChunkCache = null
+var thread_pool: ChunkThreadPool = null
 
 ## Statistics
 var stats_active_chunks: int = 0
@@ -50,11 +60,20 @@ func _ready() -> void:
 	print("  - pool_size: %d" % pool_size)
 	print("  - enable_chunk_cache: %s" % enable_chunk_cache)
 	print("  - cache_size_limit_mb: %d MB" % cache_size_limit_mb)
+	print("  - enable_threading: %s" % enable_threading)
+	print("  - worker_thread_count: %d" % worker_thread_count)
 
 	# Initialize VoxelTypes registry
 	print("[ChunkManager] Initializing VoxelTypes registry...")
 	VoxelTypes.initialize()
 	print("[ChunkManager] VoxelTypes initialized with %d block types" % VoxelTypes.Type.size())
+
+	# Initialize thread pool for async chunk generation
+	if enable_threading:
+		print("[ChunkManager] Initializing thread pool...")
+		thread_pool = ChunkThreadPool.new(worker_thread_count)
+		thread_pool.max_jobs_per_frame = max_jobs_per_frame
+		print("[ChunkManager] Thread pool initialized with %d workers" % worker_thread_count)
 
 	# Initialize chunk cache (seed will be set by VoxelWorld)
 	if enable_chunk_cache:
@@ -87,6 +106,7 @@ func update_chunks(player_position: Vector3, camera_forward: Vector3 = Vector3.F
 
 	print("[ChunkManager] Player moved %.1f units, updating chunks..." % distance)
 	last_update_position = player_position
+	tracked_position = player_position
 
 	# Get player's chunk position
 	var player_chunk_pos := world_to_chunk_position(player_position)
@@ -120,6 +140,102 @@ func update_chunks(player_position: Vector3, camera_forward: Vector3 = Vector3.F
 		stats_chunks_generated,
 		stats_chunks_meshed
 	])
+
+## Process completed threaded jobs each frame
+func _process(delta: float) -> void:
+	if not thread_pool:
+		return
+
+	# Process completed jobs
+	thread_pool.process_completed_jobs(_on_job_completed, max_jobs_per_frame)
+
+## Handle completed job from thread pool
+func _on_job_completed(job) -> void:
+	if job.job_type == ChunkThreadPool.JobType.GENERATE_TERRAIN:
+		_on_generation_completed(job)
+	elif job.job_type == ChunkThreadPool.JobType.BUILD_MESH:
+		_on_meshing_completed(job)
+
+## Handle completed terrain generation job
+func _on_generation_completed(job) -> void:
+	var chunk_pos: Vector3i = job.chunk_pos
+
+	# Remove from generating set
+	generating_chunks.erase(chunk_pos)
+
+	# Check for errors
+	if job.error:
+		print("[ChunkManager] Generation error for chunk %s: %s" % [chunk_pos, job.error])
+		return
+
+	# Get generated voxel data
+	var voxel_data: VoxelData = job.result
+	if not voxel_data:
+		print("[ChunkManager] No voxel data generated for chunk %s" % chunk_pos)
+		return
+
+	# Check if chunk is empty
+	if voxel_data.is_empty():
+		return
+
+	# Create chunk and set data
+	var chunk := _get_chunk_from_pool()
+	chunk.initialize(chunk_pos)
+	chunk.voxel_data = voxel_data
+	chunk.state = Chunk.State.GENERATING
+	stats_chunks_generated += 1
+
+	# Add to active chunks
+	active_chunks[chunk_pos] = chunk
+
+	# Update neighbor references
+	_update_chunk_neighbors(chunk_pos, chunk)
+
+	# Queue mesh building job
+	chunk.state = Chunk.State.MESHING
+	meshing_chunks[chunk_pos] = chunk
+
+	if thread_pool:
+		var priority := 1.0 / max(tracked_position.distance_to(chunk.get_world_position()), 1.0)
+		thread_pool.queue_meshing_job(chunk, mesh_builder, priority)
+	else:
+		# Fallback to synchronous meshing
+		_build_chunk_mesh_sync(chunk)
+
+## Handle completed mesh building job
+func _on_meshing_completed(job) -> void:
+	var chunk_pos: Vector3i = job.chunk_pos
+
+	# Remove from meshing set
+	var chunk: Chunk = meshing_chunks.get(chunk_pos)
+	meshing_chunks.erase(chunk_pos)
+
+	if not chunk:
+		return
+
+	# Check for errors
+	if job.error:
+		print("[ChunkManager] Meshing error for chunk %s: %s" % [chunk_pos, job.error])
+		return
+
+	# Get mesh data
+	var mesh_data: Dictionary = job.result
+	if mesh_data.is_empty():
+		return
+
+	# Create mesh instance on main thread
+	var mesh_instance := mesh_builder.create_mesh_instance_from_data(mesh_data)
+	if mesh_instance:
+		chunk.mesh_instance = mesh_instance
+		mesh_instance.position = chunk.get_world_position()
+		add_child(mesh_instance)
+		stats_chunks_meshed += 1
+
+	# Activate chunk
+	chunk.state = Chunk.State.ACTIVE
+
+## Tracked position for priority calculations (set by update_chunks)
+var tracked_position: Vector3 = Vector3.ZERO
 
 ## Update frustum culling for all active chunks
 ## Shows/hides chunks based on camera frustum visibility
@@ -308,14 +424,47 @@ func _calculate_chunk_priority(chunk_pos: Vector3i, player_position: Vector3, ca
 
 ## Load a single chunk at the given position
 func load_chunk(chunk_pos: Vector3i) -> Chunk:
-	# Check if already loaded
+	# Check if already loaded, generating, or meshing
 	if chunk_pos in active_chunks:
-		print("[ChunkManager] Chunk %s already loaded, skipping" % chunk_pos)
 		return active_chunks[chunk_pos]
 
-	# Reduce console spam - only log warnings
-	# print("[ChunkManager] Loading chunk at %s..." % chunk_pos)
+	if chunk_pos in generating_chunks or chunk_pos in meshing_chunks:
+		return null  # Already being processed
 
+	# Try threading path first
+	if thread_pool and terrain_generator:
+		return _load_chunk_threaded(chunk_pos)
+	else:
+		# Fallback to synchronous loading
+		return _load_chunk_sync(chunk_pos)
+
+## Load chunk using threaded path
+func _load_chunk_threaded(chunk_pos: Vector3i) -> Chunk:
+	# Try to load from cache first
+	var chunk: Chunk = null
+
+	if chunk_cache and chunk_cache.has_cached_chunk(chunk_pos):
+		chunk = chunk_cache.load_chunk(chunk_pos)
+		if chunk:
+			# Cached chunk loaded - skip generation, go straight to meshing
+			active_chunks[chunk_pos] = chunk
+			_update_chunk_neighbors(chunk_pos, chunk)
+
+			# Queue mesh building
+			chunk.state = Chunk.State.MESHING
+			meshing_chunks[chunk_pos] = chunk
+			var priority := 1.0 / max(tracked_position.distance_to(chunk.get_world_position()), 1.0)
+			thread_pool.queue_meshing_job(chunk, mesh_builder, priority)
+			return chunk
+
+	# Not cached - queue terrain generation
+	generating_chunks[chunk_pos] = true
+	var priority := 1.0 / max(tracked_position.distance_to(Vector3(chunk_pos * VoxelData.CHUNK_SIZE)), 1.0)
+	thread_pool.queue_generation_job(chunk_pos, terrain_generator, priority)
+	return null
+
+## Load chunk synchronously (fallback when threading disabled)
+func _load_chunk_sync(chunk_pos: Vector3i) -> Chunk:
 	# Try to load from cache first
 	var chunk: Chunk = null
 	var loaded_from_cache := false
@@ -324,23 +473,18 @@ func load_chunk(chunk_pos: Vector3i) -> Chunk:
 		chunk = chunk_cache.load_chunk(chunk_pos)
 		if chunk:
 			loaded_from_cache = true
-			# print("[ChunkManager]   Loaded chunk from cache")
 
 	# If not cached, create new chunk and generate terrain
 	if not chunk:
 		# Get chunk from pool or create new
 		chunk = _get_chunk_from_pool()
-		# print("[ChunkManager]   Got chunk from pool (pooled: %d)" % chunk_pool.size())
 		chunk.initialize(chunk_pos)
 		chunk.state = Chunk.State.GENERATING
 
 		# Generate terrain data
 		if terrain_generator:
-			# print("[ChunkManager]   Generating terrain...")
 			chunk.voxel_data = terrain_generator.generate_chunk(chunk_pos)
 			stats_chunks_generated += 1
-			# var solid_count := chunk.voxel_data.count_solid_voxels()
-			# print("[ChunkManager]   Generated %d solid voxels" % solid_count)
 		else:
 			print("[ChunkManager]   WARNING: No terrain generator, using test pattern")
 			_generate_test_chunk(chunk)
@@ -388,6 +532,21 @@ func load_chunk(chunk_pos: Vector3i) -> Chunk:
 	# Reduce console spam
 	# print("[ChunkManager] ✓ Chunk %s loaded successfully" % chunk_pos)
 	return chunk
+
+## Build chunk mesh synchronously
+func _build_chunk_mesh_sync(chunk: Chunk) -> void:
+	if not mesh_builder or not chunk:
+		return
+
+	var mesh_instance: MeshInstance3D = mesh_builder.build_mesh(chunk)
+	if mesh_instance:
+		chunk.mesh_instance = mesh_instance
+		mesh_instance.position = chunk.get_world_position()
+		add_child(mesh_instance)
+		stats_chunks_meshed += 1
+
+	chunk.state = Chunk.State.ACTIVE
+	meshing_chunks.erase(chunk.position)
 
 ## Unload a chunk at the given position
 func unload_chunk(chunk_pos: Vector3i) -> void:
@@ -600,6 +759,16 @@ func _generate_test_chunk(chunk: Chunk) -> void:
 
 ## Cleanup all chunks
 func cleanup_all() -> void:
+	# Shutdown thread pool first
+	if thread_pool:
+		thread_pool.shutdown()
+		thread_pool = null
+
+	# Clear job tracking
+	generating_chunks.clear()
+	meshing_chunks.clear()
+
+	# Unload all chunks
 	var chunks_to_remove := active_chunks.keys()
 	for chunk_pos in chunks_to_remove:
 		unload_chunk(chunk_pos)
@@ -617,7 +786,9 @@ func get_stats() -> Dictionary:
 		"active_chunks": stats_active_chunks,
 		"pooled_chunks": stats_pooled_chunks,
 		"chunks_generated": stats_chunks_generated,
-		"chunks_meshed": stats_chunks_meshed
+		"chunks_meshed": stats_chunks_meshed,
+		"generating_chunks": generating_chunks.size(),
+		"meshing_chunks": meshing_chunks.size()
 	}
 
 	# Add cache stats if available
@@ -629,6 +800,16 @@ func get_stats() -> Dictionary:
 		stats["cache_hit_rate"] = cache_stats.hit_rate
 		stats["cache_size_mb"] = cache_stats.cache_size_mb
 
+	# Add thread pool stats if available
+	if thread_pool:
+		var thread_stats := thread_pool.get_stats()
+		stats["threading_enabled"] = true
+		stats["worker_count"] = thread_stats.worker_count
+		stats["pending_jobs"] = thread_stats.pending_jobs
+		stats["completed_jobs"] = thread_stats.completed_jobs
+	else:
+		stats["threading_enabled"] = false
+
 	return stats
 
 ## Print debug info
@@ -636,8 +817,18 @@ func print_stats() -> void:
 	print("ChunkManager Stats:")
 	print("  Active chunks: %d" % stats_active_chunks)
 	print("  Pooled chunks: %d" % stats_pooled_chunks)
+	print("  Generating: %d" % generating_chunks.size())
+	print("  Meshing: %d" % meshing_chunks.size())
 	print("  Total generated: %d" % stats_chunks_generated)
 	print("  Total meshed: %d" % stats_chunks_meshed)
+
+	# Print thread pool stats
+	if thread_pool:
+		var thread_stats := thread_pool.get_stats()
+		print("  Threading enabled: Yes")
+		print("  Workers: %d" % thread_stats.worker_count)
+		print("  Pending jobs: %d" % thread_stats.pending_jobs)
+		print("  Completed jobs: %d" % thread_stats.completed_jobs)
 
 	# Print cache stats
 	if chunk_cache:
