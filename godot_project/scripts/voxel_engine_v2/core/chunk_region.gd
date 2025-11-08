@@ -197,8 +197,10 @@ func rebuild_combined_mesh(mesh_builder) -> void:
 		combined_arrays[Mesh.ARRAY_INDEX] = indices
 
 	# Create ArrayMesh with compression (Sodium-inspired optimization)
+	# Use Godot 4's ARRAY_FLAG_COMPRESS_ATTRIBUTES to compress normals, colors, uvs
 	var array_mesh := ArrayMesh.new()
-	array_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, combined_arrays, [], {}, Mesh.ARRAY_COMPRESS_DEFAULT)
+	var compression_flags: int = Mesh.ARRAY_FLAG_COMPRESS_ATTRIBUTES
+	array_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, combined_arrays, [], {}, compression_flags)
 
 	# Create MeshInstance3D
 	mesh_instance = MeshInstance3D.new()

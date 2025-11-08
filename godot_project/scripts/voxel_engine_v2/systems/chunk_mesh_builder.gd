@@ -9,7 +9,12 @@ const VOXEL_SIZE: float = 1.0
 
 ## Enable vertex compression (Sodium-inspired: reduces memory by ~30-40%)
 ## Uses half-precision floats and compressed formats to reduce bandwidth
+## NOTE: Godot 4 handles compression differently - using ArrayFormat flags
 const ENABLE_VERTEX_COMPRESSION: bool = true
+
+## Godot 4 compression flags (ArrayFormat enum)
+## ARRAY_FLAG_COMPRESS_ATTRIBUTES compresses normals, tangents, colors, uvs
+const COMPRESSION_FLAGS: int = Mesh.ARRAY_FLAG_COMPRESS_ATTRIBUTES if ENABLE_VERTEX_COMPRESSION else 0
 
 ## Face direction vectors
 const FACE_NORMALS := {
@@ -84,12 +89,9 @@ func build_mesh(chunk: Chunk) -> MeshInstance3D:
 
 	# Create mesh instance with compression
 	var mesh_instance := MeshInstance3D.new()
-	if ENABLE_VERTEX_COMPRESSION:
-		# Commit with vertex compression flags (Sodium-inspired optimization)
-		# This reduces memory bandwidth by ~30-40%
-		mesh_instance.mesh = st.commit(null, Mesh.ARRAY_COMPRESS_DEFAULT)
-	else:
-		mesh_instance.mesh = st.commit()
+	# Commit with vertex compression flags (Sodium-inspired optimization)
+	# This reduces memory bandwidth by ~30-40%
+	mesh_instance.mesh = st.commit(null, COMPRESSION_FLAGS)
 	mesh_instance.material_override = default_material
 
 	# Enable shadow casting
@@ -139,11 +141,7 @@ func build_mesh_data(chunk: Chunk) -> Dictionary:
 	st.index()
 
 	# Commit to mesh and return data (with compression if enabled)
-	var mesh: ArrayMesh
-	if ENABLE_VERTEX_COMPRESSION:
-		mesh = st.commit(null, Mesh.ARRAY_COMPRESS_DEFAULT)
-	else:
-		mesh = st.commit()
+	var mesh: ArrayMesh = st.commit(null, COMPRESSION_FLAGS)
 
 	# Also extract arrays for region batching
 	var arrays := mesh.surface_get_arrays(0) if mesh.get_surface_count() > 0 else []
@@ -192,11 +190,7 @@ func build_mesh_arrays(chunk: Chunk) -> Array:
 	st.index()
 
 	# Commit to temporary mesh to get arrays (with compression if enabled)
-	var temp_mesh: ArrayMesh
-	if ENABLE_VERTEX_COMPRESSION:
-		temp_mesh = st.commit(null, Mesh.ARRAY_COMPRESS_DEFAULT)
-	else:
-		temp_mesh = st.commit()
+	var temp_mesh: ArrayMesh = st.commit(null, COMPRESSION_FLAGS)
 
 	# Extract arrays
 	if temp_mesh.get_surface_count() > 0:
