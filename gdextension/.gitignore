@@ -1,0 +1,32 @@
+# SCons build files
+.sconsign.dblite
+.scons_env.json
+
+# Compiled object files
+*.o
+*.os
+*.obj
+
+# Compiled libraries
+*.so
+*.dll
+*.dylib
+*.a
+*.lib
+
+# SCons cache
+.sconf_temp/
+
+# Build directories
+bin/*.so
+bin/*.dll
+bin/*.dylib
+
+# Keep the bin directory structure but ignore binaries
+!bin/.gitkeep
+
+# godot-cpp build artifacts
+godot-cpp/bin/
+godot-cpp/.sconsign.dblite
+godot-cpp/**/*.o
+godot-cpp/**/*.os

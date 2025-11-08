@@ -1,0 +1,46 @@
+#!/usr/bin/env python
+import os
+import sys
+
+env = SConscript("godot-cpp/SConstruct")
+
+# For reference:
+# - CCFLAGS are compilation flags shared between C and C++
+# - CFLAGS are for C-specific compilation flags
+# - CXXFLAGS are for C++-specific compilation flags
+# - CPPFLAGS are for pre-processor flags
+# - CPPDEFINES are for pre-processor defines
+# - LINKFLAGS are for linking flags
+
+# tweak this if you want to use different folders, or more folders, to store your source code in.
+env.Append(CPPPATH=["src/"])
+sources = Glob("src/*.cpp")
+sources += Glob("src/core/*.cpp")
+sources += Glob("src/systems/*.cpp")
+sources += Glob("src/util/*.cpp")
+
+# Enable C++17 for better performance and features
+env.Append(CXXFLAGS=["-std=c++17"])
+
+# Add optimization flags for release builds
+if env["target"] == "template_release":
+    env.Append(CCFLAGS=["-O3", "-flto", "-march=native"])
+    env.Append(LINKFLAGS=["-flto"])
+
+# Enable multithreading
+env.Append(CPPDEFINES=["VOXEL_MULTITHREAD"])
+
+if env["platform"] == "macos":
+    library = env.SharedLibrary(
+        "bin/libvoxelengine.{}.{}.framework/libvoxelengine.{}.{}".format(
+            env["platform"], env["target"], env["platform"], env["target"]
+        ),
+        source=sources,
+    )
+else:
+    library = env.SharedLibrary(
+        "bin/libvoxelengine{}{}".format(env["suffix"], env["SHLIBSUFFIX"]),
+        source=sources,
+    )
+
+Default(library)
