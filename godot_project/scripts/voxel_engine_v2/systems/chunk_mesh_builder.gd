@@ -438,28 +438,37 @@ func _add_greedy_quad(st: SurfaceTool, pos: Vector3i, direction: Vector3i, width
 	elif direction == Vector3i.LEFT:
 		_add_west_face_sized(st, world_pos, width, height, u_axis, v_axis, voxel_type)
 
-## Get a pastel color based on y-level (height-based coloring)
-func _get_color_for_y_level(y_pos: float) -> Color:
-	# Normalize y position to 0-1 range (assuming terrain between y=0 and y=128)
-	var normalized_y: float = clamp(y_pos / 128.0, 0.0, 1.0)
-
-	# Create pastel gradient from bottom to top
-	# Low elevations: pastel blue-green (water/low areas)
-	# Mid elevations: pastel green-yellow (plains/hills)
-	# High elevations: pastel pink-purple (mountains/peaks)
-
-	if normalized_y < 0.33:
-		# Bottom third: pastel aqua to mint green
-		var t: float = normalized_y / 0.33
-		return Color(0.7, 0.9, 0.85).lerp(Color(0.75, 0.95, 0.75), t)
-	elif normalized_y < 0.66:
-		# Middle third: mint green to pastel yellow
-		var t: float = (normalized_y - 0.33) / 0.33
-		return Color(0.75, 0.95, 0.75).lerp(Color(0.95, 0.95, 0.7), t)
-	else:
-		# Top third: pastel yellow to pastel pink-purple
-		var t: float = (normalized_y - 0.66) / 0.34
-		return Color(0.95, 0.95, 0.7).lerp(Color(0.95, 0.75, 0.9), t)
+## Get color based on voxel type
+func _get_color_for_voxel_type(voxel_type: int) -> Color:
+	match voxel_type:
+		VoxelTypes.Type.GRASS:
+			return Color(0.4, 0.8, 0.3)  # Bright green
+		VoxelTypes.Type.DIRT:
+			return Color(0.6, 0.4, 0.25)  # Brown
+		VoxelTypes.Type.STONE:
+			return Color(0.5, 0.5, 0.5)  # Gray
+		VoxelTypes.Type.SAND:
+			return Color(0.9, 0.85, 0.6)  # Sandy yellow
+		VoxelTypes.Type.GRAVEL:
+			return Color(0.55, 0.55, 0.55)  # Light gray
+		VoxelTypes.Type.WATER:
+			return Color(0.2, 0.5, 0.9, 0.6)  # Blue (semi-transparent)
+		VoxelTypes.Type.WOOD:
+			return Color(0.55, 0.35, 0.2)  # Dark brown
+		VoxelTypes.Type.LEAVES:
+			return Color(0.2, 0.6, 0.2)  # Dark green
+		VoxelTypes.Type.COAL_ORE:
+			return Color(0.2, 0.2, 0.2)  # Dark gray
+		VoxelTypes.Type.IRON_ORE:
+			return Color(0.7, 0.6, 0.5)  # Rusty
+		VoxelTypes.Type.GOLD_ORE:
+			return Color(0.9, 0.8, 0.3)  # Gold
+		VoxelTypes.Type.COBBLESTONE:
+			return Color(0.45, 0.45, 0.45)  # Medium gray
+		VoxelTypes.Type.LAVA:
+			return Color(1.0, 0.4, 0.1)  # Orange-red
+		_:
+			return Color(0.7, 0.7, 0.7)  # Default gray
 
 ## Add a quad (two triangles) with color
 ## Vertices should be in counter-clockwise order when viewed from outside
@@ -490,7 +499,7 @@ func _add_top_face(st: SurfaceTool, pos: Vector3, voxel_type: int) -> void:
 		pos + Vector3(VOXEL_SIZE, VOXEL_SIZE, VOXEL_SIZE), # front-right
 		pos + Vector3(0, VOXEL_SIZE, VOXEL_SIZE)       # front-left
 	])
-	var color := _get_color_for_y_level(pos.y)
+	var color := _get_color_for_voxel_type(voxel_type)
 	_add_quad(st, vertices, Vector3.UP, color * 1.0)  # Brightest (facing sky)
 
 ## Bottom face (-Y) - looking up from below, vertices are counter-clockwise
@@ -501,7 +510,7 @@ func _add_bottom_face(st: SurfaceTool, pos: Vector3, voxel_type: int) -> void:
 		pos + Vector3(VOXEL_SIZE, 0, VOXEL_SIZE), # front-right
 		pos + Vector3(VOXEL_SIZE, 0, 0)       # back-right
 	])
-	var color := _get_color_for_y_level(pos.y)
+	var color := _get_color_for_voxel_type(voxel_type)
 	_add_quad(st, vertices, Vector3.DOWN, color * 0.6)  # Darker (shadow)
 
 ## North face (+Z) - looking from front, vertices are counter-clockwise
@@ -512,7 +521,7 @@ func _add_north_face(st: SurfaceTool, pos: Vector3, voxel_type: int) -> void:
 		pos + Vector3(VOXEL_SIZE, VOXEL_SIZE, VOXEL_SIZE), # top-right
 		pos + Vector3(VOXEL_SIZE, 0, VOXEL_SIZE)       # bottom-right
 	])
-	var color := _get_color_for_y_level(pos.y)
+	var color := _get_color_for_voxel_type(voxel_type)
 	_add_quad(st, vertices, Vector3.FORWARD, color * 0.85)  # Slightly shaded
 
 ## South face (-Z) - looking from back, vertices are counter-clockwise
@@ -523,7 +532,7 @@ func _add_south_face(st: SurfaceTool, pos: Vector3, voxel_type: int) -> void:
 		pos + Vector3(0, VOXEL_SIZE, 0),      # top-left
 		pos + Vector3(0, 0, 0)                # bottom-left
 	])
-	var color := _get_color_for_y_level(pos.y)
+	var color := _get_color_for_voxel_type(voxel_type)
 	_add_quad(st, vertices, Vector3.BACK, color * 0.85)  # Slightly shaded
 
 ## East face (+X) - looking from right side, vertices are counter-clockwise
@@ -534,7 +543,7 @@ func _add_east_face(st: SurfaceTool, pos: Vector3, voxel_type: int) -> void:
 		pos + Vector3(VOXEL_SIZE, VOXEL_SIZE, 0),  # top-back
 		pos + Vector3(VOXEL_SIZE, 0, 0)            # bottom-back
 	])
-	var color := _get_color_for_y_level(pos.y)
+	var color := _get_color_for_voxel_type(voxel_type)
 	_add_quad(st, vertices, Vector3.RIGHT, color * 0.75)  # Medium shade
 
 ## West face (-X) - looking from left side, vertices are counter-clockwise
@@ -545,7 +554,7 @@ func _add_west_face(st: SurfaceTool, pos: Vector3, voxel_type: int) -> void:
 		pos + Vector3(0, VOXEL_SIZE, VOXEL_SIZE), # top-front
 		pos + Vector3(0, 0, VOXEL_SIZE)    # bottom-front
 	])
-	var color := _get_color_for_y_level(pos.y)
+	var color := _get_color_for_voxel_type(voxel_type)
 	_add_quad(st, vertices, Vector3.LEFT, color * 0.75)  # Medium shade
 
 ## Greedy meshing sized face functions
@@ -562,7 +571,7 @@ func _add_top_face_sized(st: SurfaceTool, pos: Vector3, width: int, height: int,
 		pos + Vector3(h, VOXEL_SIZE, w),
 		pos + Vector3(0, VOXEL_SIZE, w)
 	])
-	var color := _get_color_for_y_level(pos.y)
+	var color := _get_color_for_voxel_type(voxel_type)
 	_add_quad(st, vertices, Vector3.UP, color * 1.0)
 
 ## Bottom face (-Y) - sized version for greedy meshing
@@ -576,7 +585,7 @@ func _add_bottom_face_sized(st: SurfaceTool, pos: Vector3, width: int, height: i
 		pos + Vector3(h, 0, w),
 		pos + Vector3(h, 0, 0)
 	])
-	var color := _get_color_for_y_level(pos.y)
+	var color := _get_color_for_voxel_type(voxel_type)
 	_add_quad(st, vertices, Vector3.DOWN, color * 0.6)
 
 ## North face (+Z) - sized version for greedy meshing
@@ -590,7 +599,7 @@ func _add_north_face_sized(st: SurfaceTool, pos: Vector3, width: int, height: in
 		pos + Vector3(h, w, VOXEL_SIZE),
 		pos + Vector3(h, 0, VOXEL_SIZE)
 	])
-	var color := _get_color_for_y_level(pos.y)
+	var color := _get_color_for_voxel_type(voxel_type)
 	_add_quad(st, vertices, Vector3.FORWARD, color * 0.85)
 
 ## South face (-Z) - sized version for greedy meshing
@@ -604,7 +613,7 @@ func _add_south_face_sized(st: SurfaceTool, pos: Vector3, width: int, height: in
 		pos + Vector3(0, w, 0),
 		pos + Vector3(0, 0, 0)
 	])
-	var color := _get_color_for_y_level(pos.y)
+	var color := _get_color_for_voxel_type(voxel_type)
 	_add_quad(st, vertices, Vector3.BACK, color * 0.85)
 
 ## East face (+X) - sized version for greedy meshing
@@ -618,7 +627,7 @@ func _add_east_face_sized(st: SurfaceTool, pos: Vector3, width: int, height: int
 		pos + Vector3(VOXEL_SIZE, h, 0),
 		pos + Vector3(VOXEL_SIZE, 0, 0)
 	])
-	var color := _get_color_for_y_level(pos.y)
+	var color := _get_color_for_voxel_type(voxel_type)
 	_add_quad(st, vertices, Vector3.RIGHT, color * 0.75)
 
 ## West face (-X) - sized version for greedy meshing
@@ -632,5 +641,5 @@ func _add_west_face_sized(st: SurfaceTool, pos: Vector3, width: int, height: int
 		pos + Vector3(0, h, w),
 		pos + Vector3(0, 0, w)
 	])
-	var color := _get_color_for_y_level(pos.y)
+	var color := _get_color_for_voxel_type(voxel_type)
 	_add_quad(st, vertices, Vector3.LEFT, color * 0.75)

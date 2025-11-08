@@ -126,15 +126,51 @@ func _get_voxel_at_position(world_pos: Vector3i, terrain_height: int) -> int:
 
 	# Above terrain - air
 	if y > terrain_height:
+		# Fill below sea level with water
+		if y <= base_height - 2:
+			return VoxelTypes.Type.WATER
 		return VoxelTypes.Type.AIR
 
-	# At surface - grass
-	if y == terrain_height:
-		return VoxelTypes.Type.GRASS
+	# Height-based terrain layers for visual variety
+	# High peaks: Gravel/Stone (mountain peaks) - above base + 18
+	if terrain_height > base_height + 18:
+		if y == terrain_height:
+			return VoxelTypes.Type.GRAVEL  # Rocky peak surface
+		elif y > terrain_height - 2:
+			return VoxelTypes.Type.STONE  # Mountain rock
+		else:
+			return VoxelTypes.Type.STONE  # Deep stone
 
-	# Just below surface - dirt (3 blocks)
-	if y > terrain_height - 3:
-		return VoxelTypes.Type.DIRT
+	# Upper hills: Grass and dirt - base + 8 to base + 18
+	elif terrain_height > base_height + 8:
+		if y == terrain_height:
+			return VoxelTypes.Type.GRASS  # Grassy hills
+		elif y > terrain_height - 3:
+			return VoxelTypes.Type.DIRT  # Dirt layer
+		else:
+			return VoxelTypes.Type.STONE  # Stone below
+
+	# Mid elevation: Standard grass terrain - base - 5 to base + 8
+	elif terrain_height > base_height - 5:
+		if y == terrain_height:
+			return VoxelTypes.Type.GRASS  # Grass surface
+		elif y > terrain_height - 3:
+			return VoxelTypes.Type.DIRT  # Dirt layer
+		else:
+			return VoxelTypes.Type.STONE  # Stone below
+
+	# Low areas: Sand (beaches/lowlands) - base - 15 to base - 5
+	elif terrain_height > base_height - 15:
+		if y == terrain_height:
+			return VoxelTypes.Type.SAND  # Sandy beach
+		elif y > terrain_height - 2:
+			return VoxelTypes.Type.SAND  # More sand
+		else:
+			return VoxelTypes.Type.STONE  # Stone below sand
+
+	# Very low areas: Underwater - below base - 15
+	else:
+		return VoxelTypes.Type.SAND  # Sand underwater
 
 	# Default - stone
 	return VoxelTypes.Type.STONE
