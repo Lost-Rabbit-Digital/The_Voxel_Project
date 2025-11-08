@@ -195,20 +195,41 @@ func update_chunks(player_position: Vector3, camera_forward: Vector3 = Vector3.F
 
 ## Process completed threaded jobs each frame
 func _process(delta: float) -> void:
+	var process_start := Time.get_ticks_usec()
+
+	# Process completed jobs from worker threads
+	var jobs_start := Time.get_ticks_usec()
+	var jobs_processed := 0
 	if thread_pool:
-		# Process completed jobs
-		thread_pool.process_completed_jobs(_on_job_completed, max_jobs_per_frame)
+		jobs_processed = thread_pool.process_completed_jobs(_on_job_completed, max_jobs_per_frame)
+	var jobs_time := (Time.get_ticks_usec() - jobs_start) / 1000.0
 
 	# Process batched neighbor rebuilds (prevents duplicate rebuilds in same frame)
+	var neighbor_start := Time.get_ticks_usec()
 	_process_pending_neighbor_rebuilds()
+	var neighbor_time := (Time.get_ticks_usec() - neighbor_start) / 1000.0
 
 	# Process pending mesh creations (spread over multiple frames to prevent stalls)
+	var mesh_start := Time.get_ticks_usec()
 	if enable_region_batching:
 		_process_pending_mesh_creations()
+	var mesh_time := (Time.get_ticks_usec() - mesh_start) / 1000.0
 
 	# Rebuild dirty regions if region batching is enabled
+	var dirty_start := Time.get_ticks_usec()
 	if enable_region_batching:
 		_process_dirty_regions()
+	var dirty_time := (Time.get_ticks_usec() - dirty_start) / 1000.0
+
+	var process_total := (Time.get_ticks_usec() - process_start) / 1000.0
+
+	# Log performance if any operation takes significant time (>5ms)
+	if process_total > 5.0:
+		print("[ChunkManager] SLOW FRAME (%.2fms total):" % process_total)
+		print("  - Job processing: %.2fms (%d jobs)" % [jobs_time, jobs_processed])
+		print("  - Neighbor rebuilds: %.2fms" % neighbor_time)
+		print("  - Mesh creations: %.2fms (%d pending)" % [mesh_time, pending_mesh_creations.size()])
+		print("  - Dirty regions: %.2fms (%d dirty)" % [dirty_time, dirty_regions.size()])
 
 ## Handle completed job from thread pool
 func _on_job_completed(job) -> void:
@@ -1150,10 +1171,26 @@ func _check_initial_chunks_ready() -> void:
 		if chunk and chunk.state == Chunk.State.ACTIVE:
 			active_count += 1
 
-	# Emit signal once we have enough chunks
-	if active_count >= INITIAL_CHUNKS_THRESHOLD:
-		_initial_chunks_ready = true
-		initial_chunks_ready.emit()
+	# CRITICAL FIX: With region batching, chunks can be ACTIVE but meshes not yet created
+	# (they're in pending_mesh_creations queue). We need to ensure meshes are actually visible.
+	if enable_region_batching:
+		# Check that we have enough active chunks AND meshes are actually created
+		var visible_regions := 0
+		for region in active_regions.values():
+			if region and region.mesh_instance and region.mesh_instance.visible:
+				visible_regions += 1
+
+		# Emit signal once we have enough chunks AND pending meshes are processed AND regions are visible
+		if active_count >= INITIAL_CHUNKS_THRESHOLD and pending_mesh_creations.is_empty() and visible_regions > 0:
+			_initial_chunks_ready = true
+			initial_chunks_ready.emit()
+			print("[ChunkManager] Initial chunks ready: %d active chunks, %d visible regions" % [active_count, visible_regions])
+	else:
+		# Traditional mode: just check active chunks
+		if active_count >= INITIAL_CHUNKS_THRESHOLD:
+			_initial_chunks_ready = true
+			initial_chunks_ready.emit()
+			print("[ChunkManager] Initial chunks ready: %d active chunks" % active_count)
 
 ## Cleanup all chunks
 func cleanup_all() -> void:
