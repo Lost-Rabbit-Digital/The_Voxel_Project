@@ -71,8 +71,10 @@ const TARGET_FRAME_TIME_MS: float = 16.0  # Target 60 FPS
 
 ## Maximum mesh creations per frame (prevent main thread stalls)
 const MAX_MESH_CREATIONS_PER_FRAME: int = 1  # Create only 1 mesh per frame
-const MAX_VERTICES_PER_FRAME: int = 10000  # Maximum vertices to process in one frame (lowered to prevent large mesh stalls)
-const MAX_MESH_CREATION_TIME_MS: float = 8.0  # Maximum time to spend creating meshes per frame (target ~120 FPS during loading)
+# PERFORMANCE FIX: Reduced from 10000 to 3000 to prevent 2-3 second stalls on large meshes
+# ArrayMesh.add_surface_from_arrays() blocks for GPU upload - must keep meshes small
+const MAX_VERTICES_PER_FRAME: int = 3000  # Maximum vertices to process in one frame
+const MAX_MESH_CREATION_TIME_MS: float = 5.0  # Maximum time to spend creating meshes per frame (target 200 FPS during loading)
 
 ## Chunks pending neighbor mesh rebuild (Vector3i -> true) - batched to avoid duplicates
 var pending_neighbor_rebuilds: Dictionary = {}
@@ -97,7 +99,9 @@ var thread_pool: ChunkThreadPool = null
 var occlusion_culler: OcclusionCuller = null
 
 ## Frustum culling optimization - spread work over multiple frames
-const FRUSTUM_CULL_FRAMES: int = 4  # Check 1/4 of regions per frame
+# PERFORMANCE FIX: Increased from 4 to 8 to further reduce per-frame cost
+# This means each region gets checked every 8 frames instead of every 4 frames
+const FRUSTUM_CULL_FRAMES: int = 8  # Check 1/8 of regions per frame
 var frustum_cull_frame_counter: int = 0
 
 ## Statistics
@@ -150,8 +154,10 @@ func _ready() -> void:
 	# Initialize occlusion culler
 	print("[ChunkManager] Initializing occlusion culler...")
 	occlusion_culler = OcclusionCuller.new(self)
-	occlusion_culler.mode = OcclusionCuller.Mode.FLOOD_FILL
-	print("[ChunkManager] Occlusion culler initialized")
+	# PERFORMANCE FIX: Disable occlusion culling - it causes 200ms+ stalls with flood-fill
+	# Region batching already provides good culling granularity
+	occlusion_culler.mode = OcclusionCuller.Mode.DISABLED
+	print("[ChunkManager] Occlusion culler initialized (DISABLED for performance)")
 
 	# Print adaptive chunk sizing configuration
 	print("[ChunkManager] Adaptive chunk sizing enabled:")
@@ -1460,6 +1466,15 @@ func _process_pending_mesh_creations() -> void:
 		var peek_data: Dictionary = pending_mesh_creations[0]
 		var peek_vertex_count: int = peek_data.vertex_count
 
+		# PERFORMANCE FIX: Absolutely skip meshes that are too large to prevent 2-3s stalls
+		# If a mesh has more than 2x our frame budget, skip it this frame
+		const ABSOLUTE_MAX_VERTICES: int = 6000  # Never create meshes larger than this in one frame
+		if peek_vertex_count > ABSOLUTE_MAX_VERTICES and meshes_created > 0:
+			# Move to end of queue - we'll try again next frame when we have full budget
+			pending_mesh_creations.pop_front()
+			pending_mesh_creations.append(peek_data)
+			break
+
 		# Skip meshes that would exceed our vertex budget
 		# Put them at the end of the queue to retry later
 		var mesh_data: Dictionary
@@ -1470,8 +1485,10 @@ func _process_pending_mesh_creations() -> void:
 
 			# If we've checked all meshes and none fit, break
 			if meshes_created == 0:
-				# All pending meshes are too large, process one anyway (the next in queue)
+				# All pending meshes are too large, process one anyway (but log a warning)
 				mesh_data = pending_mesh_creations.pop_front()
+				if peek_vertex_count > ABSOLUTE_MAX_VERTICES:
+					print("[ChunkManager] WARNING: Creating very large mesh with %d vertices - may cause stutter!" % peek_vertex_count)
 			else:
 				break
 		else:
