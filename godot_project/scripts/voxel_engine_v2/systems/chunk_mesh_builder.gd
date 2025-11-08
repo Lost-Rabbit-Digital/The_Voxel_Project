@@ -336,10 +336,12 @@ func _merge_quads_in_mask(st: SurfaceTool, chunk: Chunk, mask: Array, direction:
 	# Greedy meshing algorithm
 	for u in range(VoxelData.CHUNK_SIZE):
 		for v in range(VoxelData.CHUNK_SIZE):
-			if mask[u][v] == null:
+			# Skip empty mask cells
+			var mask_value = mask[u][v]
+			if mask_value == null:
 				continue
 
-			var voxel_type: int = mask[u][v]
+			var voxel_type: int = mask_value
 
 			# Measure width (in v direction)
 			var width := 1

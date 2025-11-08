@@ -228,7 +228,9 @@ func _on_meshing_completed(job) -> void:
 		return
 
 	# Get old mesh instance if this is a rebuild
-	var old_mesh: MeshInstance3D = chunk.get_meta("old_mesh_instance", null)
+	var old_mesh: MeshInstance3D = null
+	if chunk.has_meta("old_mesh_instance"):
+		old_mesh = chunk.get_meta("old_mesh_instance")
 
 	# Create mesh instance on main thread
 	var mesh_instance: MeshInstance3D = mesh_builder.create_mesh_instance_from_data(mesh_data)
