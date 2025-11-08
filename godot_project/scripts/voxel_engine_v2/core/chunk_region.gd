@@ -112,12 +112,12 @@ func rebuild_combined_mesh(mesh_builder) -> void:
 		if chunk_arrays.is_empty():
 			continue
 
-		# Get the arrays from the chunk mesh data
-		var chunk_vertices: PackedVector3Array = chunk_arrays[Mesh.ARRAY_VERTEX] if chunk_arrays.size() > Mesh.ARRAY_VERTEX else PackedVector3Array()
-		var chunk_normals: PackedVector3Array = chunk_arrays[Mesh.ARRAY_NORMAL] if chunk_arrays.size() > Mesh.ARRAY_NORMAL else PackedVector3Array()
-		var chunk_colors: PackedColorArray = chunk_arrays[Mesh.ARRAY_COLOR] if chunk_arrays.size() > Mesh.ARRAY_COLOR else PackedColorArray()
-		var chunk_uvs: PackedVector2Array = chunk_arrays[Mesh.ARRAY_TEX_UV] if chunk_arrays.size() > Mesh.ARRAY_TEX_UV else PackedVector2Array()
-		var chunk_indices: PackedInt32Array = chunk_arrays[Mesh.ARRAY_INDEX] if chunk_arrays.size() > Mesh.ARRAY_INDEX else PackedInt32Array()
+		# Get the arrays from the chunk mesh data (handle null values)
+		var chunk_vertices: PackedVector3Array = chunk_arrays[Mesh.ARRAY_VERTEX] if (chunk_arrays.size() > Mesh.ARRAY_VERTEX and chunk_arrays[Mesh.ARRAY_VERTEX] != null) else PackedVector3Array()
+		var chunk_normals: PackedVector3Array = chunk_arrays[Mesh.ARRAY_NORMAL] if (chunk_arrays.size() > Mesh.ARRAY_NORMAL and chunk_arrays[Mesh.ARRAY_NORMAL] != null) else PackedVector3Array()
+		var chunk_colors: PackedColorArray = chunk_arrays[Mesh.ARRAY_COLOR] if (chunk_arrays.size() > Mesh.ARRAY_COLOR and chunk_arrays[Mesh.ARRAY_COLOR] != null) else PackedColorArray()
+		var chunk_uvs: PackedVector2Array = chunk_arrays[Mesh.ARRAY_TEX_UV] if (chunk_arrays.size() > Mesh.ARRAY_TEX_UV and chunk_arrays[Mesh.ARRAY_TEX_UV] != null) else PackedVector2Array()
+		var chunk_indices: PackedInt32Array = chunk_arrays[Mesh.ARRAY_INDEX] if (chunk_arrays.size() > Mesh.ARRAY_INDEX and chunk_arrays[Mesh.ARRAY_INDEX] != null) else PackedInt32Array()
 
 		if chunk_vertices.is_empty():
 			continue
