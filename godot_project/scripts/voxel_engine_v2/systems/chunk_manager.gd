@@ -55,7 +55,7 @@ var active_regions: Dictionary = {}
 var dirty_regions: Dictionary = {}  # Vector3i -> true
 
 ## Maximum regions to rebuild per frame (prevents stuttering)
-const MAX_REGION_REBUILDS_PER_FRAME: int = 2
+const MAX_REGION_REBUILDS_PER_FRAME: int = 4  # Increased for faster initial load
 
 ## Chunks pending neighbor mesh rebuild (Vector3i -> true) - batched to avoid duplicates
 var pending_neighbor_rebuilds: Dictionary = {}
@@ -67,7 +67,7 @@ var last_update_position: Vector3 = Vector3.ZERO
 const UPDATE_THRESHOLD: float = 8.0
 
 ## Maximum chunks to load per frame (prevents stuttering)
-const MAX_CHUNKS_PER_FRAME: int = 4
+const MAX_CHUNKS_PER_FRAME: int = 8  # Increased for faster initial load
 
 ## References to other systems (set by VoxelWorld)
 var terrain_generator = null

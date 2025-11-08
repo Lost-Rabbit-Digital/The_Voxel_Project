@@ -16,7 +16,7 @@ extends Node3D
 @export_group("Performance")
 @export var enable_chunk_pooling: bool = true
 @export var chunk_pool_size: int = 128
-@export var enable_threading: bool = false  # Phase 3 feature
+@export var enable_threading: bool = true  # Multi-threaded chunk generation
 
 @export_group("Debug")
 @export var show_debug_info: bool = true
@@ -175,6 +175,7 @@ func _initialize_systems() -> void:
 	chunk_manager.vertical_render_distance = vertical_render_distance
 	chunk_manager.enable_pooling = enable_chunk_pooling
 	chunk_manager.pool_size = chunk_pool_size
+	chunk_manager.enable_threading = enable_threading  # Pass threading setting
 	print("[VoxelWorld] Adding ChunkManager as child...")
 	add_child(chunk_manager)
 	print("[VoxelWorld] ChunkManager added to scene tree")
