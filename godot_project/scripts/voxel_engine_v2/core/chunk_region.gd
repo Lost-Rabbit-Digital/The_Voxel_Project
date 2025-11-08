@@ -229,14 +229,46 @@ func rebuild_combined_mesh(mesh_builder) -> void:
 		])
 
 ## Get the world position of this region's origin
+## NOTE: Regions span multiple Y heights, so Y position uses the min chunk Y
 func get_region_world_position() -> Vector3:
-	return Vector3(region_position * REGION_SIZE * VoxelData.CHUNK_SIZE)
+	var world_x := float(region_position.x * REGION_SIZE * VoxelData.CHUNK_SIZE_XZ)
+	var world_z := float(region_position.z * REGION_SIZE * VoxelData.CHUNK_SIZE_XZ)
+
+	# For Y, use the minimum chunk Y in this region
+	var min_chunk_y := region_position.y * REGION_SIZE
+	var world_y := float(ChunkHeightZones.chunk_y_to_world_y(min_chunk_y))
+
+	return Vector3(world_x, world_y, world_z)
 
 ## Get axis-aligned bounding box for this entire region
+## CRITICAL: Must account for adaptive chunk heights!
 func get_aabb() -> AABB:
-	var world_pos := get_region_world_position()
-	var size := Vector3.ONE * (REGION_SIZE * VoxelData.CHUNK_SIZE)
-	return AABB(world_pos, size)
+	if chunks.is_empty():
+		# Default fallback for empty regions
+		var world_pos := get_region_world_position()
+		var size := Vector3.ONE * (REGION_SIZE * VoxelData.CHUNK_SIZE_XZ)
+		return AABB(world_pos, size)
+
+	# Calculate actual AABB from all chunks in region (accounts for adaptive heights)
+	var min_pos := Vector3(INF, INF, INF)
+	var max_pos := Vector3(-INF, -INF, -INF)
+
+	for chunk in chunks.values():
+		if chunk and is_instance_valid(chunk):
+			var chunk_aabb := chunk.get_aabb()
+			var chunk_min := chunk_aabb.position
+			var chunk_max := chunk_aabb.position + chunk_aabb.size
+
+			min_pos.x = min(min_pos.x, chunk_min.x)
+			min_pos.y = min(min_pos.y, chunk_min.y)
+			min_pos.z = min(min_pos.z, chunk_min.z)
+
+			max_pos.x = max(max_pos.x, chunk_max.x)
+			max_pos.y = max(max_pos.y, chunk_max.y)
+			max_pos.z = max(max_pos.z, chunk_max.z)
+
+	var size := max_pos - min_pos
+	return AABB(min_pos, size)
 
 ## Convert chunk position to region position
 static func chunk_to_region_position(chunk_pos: Vector3i) -> Vector3i:

@@ -72,6 +72,9 @@ const UPDATE_THRESHOLD: float = 8.0
 ## Maximum chunks to load per frame (prevents stuttering)
 const MAX_CHUNKS_PER_FRAME: int = 4  # Match region rebuild rate to avoid bottleneck
 
+## Maximum pending jobs in thread pool before we stop queuing new chunks
+const MAX_PENDING_JOBS: int = 32  # Don't overwhelm the workers
+
 ## References to other systems (set by VoxelWorld)
 var terrain_generator = null
 var mesh_builder = null
@@ -141,7 +144,11 @@ func _ready() -> void:
 ## Update chunks based on player position
 ## Only updates if player has moved significantly
 func update_chunks(player_position: Vector3, camera_forward: Vector3 = Vector3.FORWARD) -> void:
-	# Check if we need to update
+	# Always update stats even if we don't recalculate chunks
+	stats_active_chunks = active_chunks.size()
+	stats_pooled_chunks = chunk_pool.size()
+
+	# Check if we need to update chunk loading
 	var distance := last_update_position.distance_to(player_position)
 	if distance < UPDATE_THRESHOLD:
 		# Still process any pending chunks from the load queue
@@ -526,12 +533,17 @@ func _process_load_queue() -> void:
 	if load_queue.is_empty():
 		return
 
+	# CRITICAL: Don't overwhelm the thread pool!
+	# If workers are backed up, don't queue more chunks
+	if thread_pool and thread_pool.get_pending_job_count() > MAX_PENDING_JOBS:
+		return
+
 	var loaded_count := 0
 	var chunks_to_remove: Array[Vector3i] = []
 
 	for chunk_pos in load_queue:
-		# Skip if already loaded or out of range
-		if chunk_pos in active_chunks:
+		# Skip if already loaded or being processed
+		if chunk_pos in active_chunks or chunk_pos in generating_chunks or chunk_pos in meshing_chunks:
 			chunks_to_remove.append(chunk_pos)
 			continue
 
@@ -544,12 +556,18 @@ func _process_load_queue() -> void:
 		if loaded_count >= MAX_CHUNKS_PER_FRAME:
 			break
 
+		# Stop if thread pool is getting full
+		if thread_pool and thread_pool.get_pending_job_count() > MAX_PENDING_JOBS:
+			break
+
 	# Remove loaded chunks from queue
 	for chunk_pos in chunks_to_remove:
 		load_queue.erase(chunk_pos)
 
-	# if loaded_count > 0:
-	# 	print("[ChunkManager] Processed %d chunks from queue, %d remaining" % [loaded_count, load_queue.size()])
+	# Log queue progress periodically
+	if load_queue.size() > 100 and loaded_count > 0:
+		var pending_jobs := thread_pool.get_pending_job_count() if thread_pool else 0
+		print("[ChunkManager] Load queue: %d chunks remaining, %d pending jobs" % [load_queue.size(), pending_jobs])
 
 ## Calculate priority for a chunk based on distance and camera direction
 ## Higher priority = should be loaded sooner
@@ -594,6 +612,11 @@ func load_chunk(chunk_pos: Vector3i) -> Chunk:
 
 ## Load chunk using threaded path
 func _load_chunk_threaded(chunk_pos: Vector3i) -> Chunk:
+	# CRITICAL: Don't overwhelm the thread pool!
+	# If we have too many pending jobs, skip loading this chunk for now
+	if thread_pool and thread_pool.get_pending_job_count() > MAX_PENDING_JOBS:
+		return null
+
 	# Try to load from cache first
 	var chunk: Chunk = null
 
@@ -613,7 +636,7 @@ func _load_chunk_threaded(chunk_pos: Vector3i) -> Chunk:
 
 	# Not cached - queue terrain generation
 	generating_chunks[chunk_pos] = true
-	var priority: float = 1.0 / max(tracked_position.distance_to(Vector3(chunk_pos * VoxelData.CHUNK_SIZE)), 1.0)
+	var priority: float = 1.0 / max(tracked_position.distance_to(Vector3(chunk_pos * VoxelData.CHUNK_SIZE_XZ)), 1.0)
 	thread_pool.queue_generation_job(chunk_pos, terrain_generator, priority)
 	return null
 
