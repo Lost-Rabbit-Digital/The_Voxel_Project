@@ -59,11 +59,19 @@ var dirty_regions: Dictionary = {}  # Vector3i -> true
 ## Regions currently being rebuilt (to avoid duplicate jobs)
 var rebuilding_regions: Dictionary = {}  # Vector3i -> true
 
+## Queue for pending mesh creations (to avoid main thread stalls)
+## Each entry is a Dictionary with: region_pos, region, combined_arrays, vertex_count, chunk_count, cache_hits, cache_misses
+var pending_mesh_creations: Array[Dictionary] = []
+
 ## Maximum regions to rebuild per frame (adaptive based on performance)
 var max_region_rebuilds_per_frame: int = 4  # Start conservative, will adapt
 const MIN_REGION_REBUILDS_PER_FRAME: int = 1  # Never go below this
 const MAX_REGION_REBUILDS_PER_FRAME: int = 8  # Never go above this
 const TARGET_FRAME_TIME_MS: float = 16.0  # Target 60 FPS
+
+## Maximum mesh creations per frame (prevent main thread stalls)
+const MAX_MESH_CREATIONS_PER_FRAME: int = 1  # Create only 1 mesh per frame
+const MAX_VERTICES_PER_FRAME: int = 50000  # Maximum vertices to process in one frame
 
 ## Chunks pending neighbor mesh rebuild (Vector3i -> true) - batched to avoid duplicates
 var pending_neighbor_rebuilds: Dictionary = {}
@@ -188,6 +196,10 @@ func _process(delta: float) -> void:
 
 	# Process batched neighbor rebuilds (prevents duplicate rebuilds in same frame)
 	_process_pending_neighbor_rebuilds()
+
+	# Process pending mesh creations (spread over multiple frames to prevent stalls)
+	if enable_region_batching:
+		_process_pending_mesh_creations()
 
 	# Rebuild dirty regions if region batching is enabled
 	if enable_region_batching:
@@ -386,48 +398,22 @@ func _on_region_rebuild_completed(job) -> void:
 		region.is_dirty = false
 		return
 
-	# Create the mesh on the main thread (must be done here, not on worker thread)
-	# Clear existing mesh
-	if region.mesh_instance:
-		region.remove_child(region.mesh_instance)
-		region.mesh_instance.queue_free()
-		region.mesh_instance = null
+	# CRITICAL FIX: Instead of creating the mesh immediately (which can cause 4+ second stalls),
+	# queue it for deferred creation. This spreads mesh creation over multiple frames.
+	var mesh_data := {
+		"region_pos": region_pos,
+		"region": region,
+		"combined_arrays": combined_arrays,
+		"vertex_count": result.get("vertex_count", 0),
+		"chunk_count": result.get("chunk_count", 0),
+		"cache_hits": result.get("cache_hits", 0),
+		"cache_misses": result.get("cache_misses", 0)
+	}
 
-	# Create ArrayMesh
-	var array_mesh := ArrayMesh.new()
-	array_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, combined_arrays)
+	pending_mesh_creations.append(mesh_data)
 
-	# Create MeshInstance3D
-	region.mesh_instance = MeshInstance3D.new()
-	region.mesh_instance.mesh = array_mesh
-
-	# Apply material if available
-	if region.material:
-		region.mesh_instance.material_override = region.material
-
-	# Position at region origin
-	region.mesh_instance.position = Vector3.ZERO  # Vertices are already offset
-
-	# Add to scene
-	region.add_child(region.mesh_instance)
-
-	# Update region stats
-	region.vertex_count = result.get("vertex_count", 0)
-	region.chunk_count = result.get("chunk_count", 0)
+	# Mark region as no longer dirty
 	region.is_dirty = false
-
-	# Log performance stats
-	var cache_hits: int = result.get("cache_hits", 0)
-	var cache_misses: int = result.get("cache_misses", 0)
-	var total_chunks: int = result.get("chunk_count", 0)
-	var cache_hit_rate := (cache_hits * 100.0 / total_chunks) if total_chunks > 0 else 0.0
-
-	# Only log if there were cache misses (indicates first-time builds)
-	if cache_misses > 0 or total_chunks > 15:
-		print("[ChunkRegion] Region %s: %d chunks (%d vertices), cache: %d hits/%d misses (%.0f%% hit rate) [ASYNC]" % [
-			region_pos, total_chunks, region.vertex_count,
-			cache_hits, cache_misses, cache_hit_rate
-		])
 
 ## Tracked position for priority calculations (set by update_chunks)
 var tracked_position: Vector3 = Vector3.ZERO
@@ -1349,4 +1335,87 @@ func _process_dirty_regions() -> void:
 	if dirty_regions.size() > 5 and regions_queued > 0:
 		print("[ChunkManager] Queued %d regions for async rebuild, %d regions pending, %d rebuilding" % [
 			regions_queued, dirty_regions.size(), rebuilding_regions.size()
+		])
+
+## Process pending mesh creations (deferred to prevent main thread stalls)
+## Creates at most 1 mesh per frame to maintain 60 FPS
+func _process_pending_mesh_creations() -> void:
+	if pending_mesh_creations.is_empty():
+		return
+
+	var meshes_created := 0
+	var vertices_processed := 0
+
+	# Process pending mesh creations (up to limits)
+	while not pending_mesh_creations.is_empty():
+		# Check if we've hit our per-frame limits
+		if meshes_created >= MAX_MESH_CREATIONS_PER_FRAME:
+			break
+		if vertices_processed >= MAX_VERTICES_PER_FRAME:
+			break
+
+		# Get next mesh to create
+		var mesh_data: Dictionary = pending_mesh_creations.pop_front()
+
+		var region_pos: Vector3i = mesh_data.region_pos
+		var region = mesh_data.region
+		var combined_arrays: Array = mesh_data.combined_arrays
+		var vertex_count: int = mesh_data.vertex_count
+		var chunk_count: int = mesh_data.chunk_count
+		var cache_hits: int = mesh_data.cache_hits
+		var cache_misses: int = mesh_data.cache_misses
+
+		# Validate region still exists
+		if not region or not is_instance_valid(region):
+			continue
+		if not region_pos in active_regions:
+			continue
+
+		# Create the mesh on the main thread (must be done here, not on worker thread)
+		# Clear existing mesh
+		if region.mesh_instance:
+			region.remove_child(region.mesh_instance)
+			region.mesh_instance.queue_free()
+			region.mesh_instance = null
+
+		# Create ArrayMesh
+		var array_mesh := ArrayMesh.new()
+		array_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, combined_arrays)
+
+		# Create MeshInstance3D
+		region.mesh_instance = MeshInstance3D.new()
+		region.mesh_instance.mesh = array_mesh
+
+		# Apply material if available
+		if region.material:
+			region.mesh_instance.material_override = region.material
+
+		# Position at region origin
+		region.mesh_instance.position = Vector3.ZERO  # Vertices are already offset
+
+		# Add to scene
+		region.add_child(region.mesh_instance)
+
+		# Update region stats
+		region.vertex_count = vertex_count
+		region.chunk_count = chunk_count
+
+		# Track progress
+		meshes_created += 1
+		vertices_processed += vertex_count
+
+		# Log performance stats
+		var cache_hit_rate := (cache_hits * 100.0 / chunk_count) if chunk_count > 0 else 0.0
+
+		# Only log if there were cache misses (indicates first-time builds)
+		if cache_misses > 0 or chunk_count > 15:
+			print("[ChunkRegion] Region %s: %d chunks (%d vertices), cache: %d hits/%d misses (%.0f%% hit rate) [DEFERRED]" % [
+				region_pos, chunk_count, vertex_count,
+				cache_hits, cache_misses, cache_hit_rate
+			])
+
+	# Log queue status if we have pending meshes
+	if pending_mesh_creations.size() > 0:
+		print("[ChunkManager] Created %d meshes (%d vertices), %d meshes pending" % [
+			meshes_created, vertices_processed, pending_mesh_creations.size()
 		])
