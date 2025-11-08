@@ -234,6 +234,9 @@ func _on_meshing_completed(job) -> void:
 	# Activate chunk
 	chunk.state = Chunk.State.ACTIVE
 
+	# Rebuild neighbor meshes to remove faces that are now hidden by this chunk
+	_rebuild_neighbor_meshes(chunk_pos)
+
 ## Tracked position for priority calculations (set by update_chunks)
 var tracked_position: Vector3 = Vector3.ZERO
 
@@ -520,14 +523,11 @@ func _load_chunk_sync(chunk_pos: Vector3i) -> Chunk:
 	else:
 		print("[ChunkManager]   WARNING: No mesh builder available")
 
-	# Skip neighbor mesh rebuilds - greedy meshing already handles cross-chunk culling
-	# via _should_add_face() which checks neighboring chunks
-	# Rebuilding neighbors on every load causes massive performance issues
-	# print("[ChunkManager]   Rebuilding neighboring chunk meshes...")
-	# _rebuild_neighbor_meshes(chunk_pos)
-
 	# Activate chunk
 	chunk.state = Chunk.State.ACTIVE
+
+	# Rebuild neighbor meshes to remove faces that are now hidden by this chunk
+	_rebuild_neighbor_meshes(chunk_pos)
 
 	# Reduce console spam
 	# print("[ChunkManager] ✓ Chunk %s loaded successfully" % chunk_pos)
@@ -547,6 +547,9 @@ func _build_chunk_mesh_sync(chunk: Chunk) -> void:
 
 	chunk.state = Chunk.State.ACTIVE
 	meshing_chunks.erase(chunk.position)
+
+	# Rebuild neighbor meshes to remove faces that are now hidden by this chunk
+	_rebuild_neighbor_meshes(chunk.position)
 
 ## Unload a chunk at the given position
 func unload_chunk(chunk_pos: Vector3i) -> void:
@@ -576,9 +579,8 @@ func unload_chunk(chunk_pos: Vector3i) -> void:
 	# Remove from active chunks
 	active_chunks.erase(chunk_pos)
 
-	# Skip neighbor mesh rebuilds - causes too many cascading rebuilds
-	# When a chunk is unloaded, neighbors will naturally rebuild when updated
-	# _rebuild_neighbor_meshes(chunk_pos)
+	# Rebuild neighbor meshes so they can render boundary faces again
+	_rebuild_neighbor_meshes(chunk_pos)
 
 	# Return to pool
 	_return_chunk_to_pool(chunk)
@@ -681,7 +683,8 @@ func _rebuild_neighbor_meshes(chunk_pos: Vector3i) -> void:
 		if neighbor_pos in active_chunks:
 			var neighbor: Chunk = active_chunks[neighbor_pos]
 			if neighbor and neighbor.state == Chunk.State.ACTIVE:
-				print("[ChunkManager]     Rebuilding mesh for neighbor at %s..." % neighbor_pos)
+				# Reduce console spam
+				# print("[ChunkManager]     Rebuilding mesh for neighbor at %s..." % neighbor_pos)
 				_rebuild_chunk_mesh(neighbor)
 
 ## Rebuild a single chunk's mesh
@@ -695,17 +698,25 @@ func _rebuild_chunk_mesh(chunk: Chunk) -> void:
 		chunk.mesh_instance.queue_free()
 		chunk.mesh_instance = null
 
-	# Build new mesh
+	# Build new mesh (use threading if available)
 	chunk.state = Chunk.State.MESHING
-	var mesh_instance: MeshInstance3D = mesh_builder.build_mesh(chunk)
-	if mesh_instance:
-		chunk.mesh_instance = mesh_instance
-		mesh_instance.position = chunk.get_world_position()
-		add_child(mesh_instance)
 
-	# Restore active state
-	chunk.state = Chunk.State.ACTIVE
-	chunk.mark_clean()
+	if thread_pool:
+		# Queue threaded mesh rebuild
+		meshing_chunks[chunk.position] = chunk
+		var priority: float = 1.0 / max(tracked_position.distance_to(chunk.get_world_position()), 1.0)
+		thread_pool.queue_meshing_job(chunk, mesh_builder, priority)
+	else:
+		# Fallback to synchronous rebuild
+		var mesh_instance: MeshInstance3D = mesh_builder.build_mesh(chunk)
+		if mesh_instance:
+			chunk.mesh_instance = mesh_instance
+			mesh_instance.position = chunk.get_world_position()
+			add_child(mesh_instance)
+
+		# Restore active state
+		chunk.state = Chunk.State.ACTIVE
+		chunk.mark_clean()
 
 ## Get chunk at a specific chunk position
 func get_chunk(chunk_pos: Vector3i) -> Chunk:
