@@ -71,7 +71,8 @@ const TARGET_FRAME_TIME_MS: float = 16.0  # Target 60 FPS
 
 ## Maximum mesh creations per frame (prevent main thread stalls)
 const MAX_MESH_CREATIONS_PER_FRAME: int = 1  # Create only 1 mesh per frame
-const MAX_VERTICES_PER_FRAME: int = 50000  # Maximum vertices to process in one frame
+const MAX_VERTICES_PER_FRAME: int = 10000  # Maximum vertices to process in one frame (lowered to prevent large mesh stalls)
+const MAX_MESH_CREATION_TIME_MS: float = 8.0  # Maximum time to spend creating meshes per frame (target ~120 FPS during loading)
 
 ## Chunks pending neighbor mesh rebuild (Vector3i -> true) - batched to avoid duplicates
 var pending_neighbor_rebuilds: Dictionary = {}
@@ -1343,8 +1344,14 @@ func _process_pending_mesh_creations() -> void:
 	if pending_mesh_creations.is_empty():
 		return
 
+	# Sort pending meshes by vertex count (smallest first) for faster initial loading
+	# This ensures small meshes appear quickly while large ones are deferred
+	if pending_mesh_creations.size() > 1:
+		pending_mesh_creations.sort_custom(func(a, b): return a.vertex_count < b.vertex_count)
+
 	var meshes_created := 0
 	var vertices_processed := 0
+	var frame_start_time := Time.get_ticks_usec()
 
 	# Process pending mesh creations (up to limits)
 	while not pending_mesh_creations.is_empty():
@@ -1354,13 +1361,36 @@ func _process_pending_mesh_creations() -> void:
 		if vertices_processed >= MAX_VERTICES_PER_FRAME:
 			break
 
-		# Get next mesh to create
-		var mesh_data: Dictionary = pending_mesh_creations.pop_front()
+		# Check time budget (bail out if we're taking too long)
+		var elapsed_ms := (Time.get_ticks_usec() - frame_start_time) / 1000.0
+		if elapsed_ms >= MAX_MESH_CREATION_TIME_MS:
+			break
+
+		# Peek at next mesh to check if it's too large
+		var mesh_data: Dictionary = pending_mesh_creations[0]
+		var vertex_count: int = mesh_data.vertex_count
+
+		# Skip meshes that would exceed our vertex budget
+		# Put them at the end of the queue to retry later
+		if vertices_processed + vertex_count > MAX_VERTICES_PER_FRAME:
+			# Move to end of queue and try next mesh
+			pending_mesh_creations.pop_front()
+			pending_mesh_creations.append(mesh_data)
+
+			# If we've checked all meshes and none fit, break
+			if meshes_created == 0:
+				# All pending meshes are too large, process one anyway
+				mesh_data = pending_mesh_creations.pop_front()
+			else:
+				break
+		else:
+			# This mesh fits in our budget, process it
+			mesh_data = pending_mesh_creations.pop_front()
 
 		var region_pos: Vector3i = mesh_data.region_pos
 		var region = mesh_data.region
 		var combined_arrays: Array = mesh_data.combined_arrays
-		var vertex_count: int = mesh_data.vertex_count
+		# vertex_count already extracted above
 		var chunk_count: int = mesh_data.chunk_count
 		var cache_hits: int = mesh_data.cache_hits
 		var cache_misses: int = mesh_data.cache_misses
@@ -1370,6 +1400,9 @@ func _process_pending_mesh_creations() -> void:
 			continue
 		if not region_pos in active_regions:
 			continue
+
+		# Measure time to create this mesh
+		var mesh_start_time := Time.get_ticks_usec()
 
 		# Create the mesh on the main thread (must be done here, not on worker thread)
 		# Clear existing mesh
@@ -1404,18 +1437,27 @@ func _process_pending_mesh_creations() -> void:
 		meshes_created += 1
 		vertices_processed += vertex_count
 
+		# Calculate mesh creation time
+		var mesh_creation_ms := (Time.get_ticks_usec() - mesh_start_time) / 1000.0
+
 		# Log performance stats
 		var cache_hit_rate := (cache_hits * 100.0 / chunk_count) if chunk_count > 0 else 0.0
 
-		# Only log if there were cache misses (indicates first-time builds)
-		if cache_misses > 0 or chunk_count > 15:
-			print("[ChunkRegion] Region %s: %d chunks (%d vertices), cache: %d hits/%d misses (%.0f%% hit rate) [DEFERRED]" % [
+		# Only log if there were cache misses (indicates first-time builds) or if mesh is large
+		if cache_misses > 0 or chunk_count > 15 or vertex_count > 5000:
+			print("[ChunkRegion] Region %s: %d chunks (%d vertices), cache: %d hits/%d misses (%.0f%% hit rate), %.1fms [DEFERRED]" % [
 				region_pos, chunk_count, vertex_count,
-				cache_hits, cache_misses, cache_hit_rate
+				cache_hits, cache_misses, cache_hit_rate, mesh_creation_ms
 			])
 
 	# Log queue status if we have pending meshes
 	if pending_mesh_creations.size() > 0:
-		print("[ChunkManager] Created %d meshes (%d vertices), %d meshes pending" % [
-			meshes_created, vertices_processed, pending_mesh_creations.size()
+		var total_pending_vertices := 0
+		for pending_mesh in pending_mesh_creations:
+			total_pending_vertices += pending_mesh.vertex_count
+
+		print("[ChunkManager] Created %d meshes (%d vertices in %.1fms), %d meshes pending (%d vertices)" % [
+			meshes_created, vertices_processed,
+			(Time.get_ticks_usec() - frame_start_time) / 1000.0,
+			pending_mesh_creations.size(), total_pending_vertices
 		])
