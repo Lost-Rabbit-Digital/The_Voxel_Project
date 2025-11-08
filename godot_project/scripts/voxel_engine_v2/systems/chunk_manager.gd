@@ -224,18 +224,21 @@ func _on_generation_completed(job) -> void:
 
 	# Handle meshing based on batching mode
 	if enable_region_batching:
-		# Region batching mode: Skip individual chunk meshing
-		# The region will build combined mesh on main thread
-		chunk.state = Chunk.State.ACTIVE
+		# Region batching mode: Queue mesh array building on worker thread
+		# This is CRITICAL - we must NOT block the main thread
+		chunk.state = Chunk.State.MESHING
+		meshing_chunks[chunk_pos] = chunk
 
-		# Track as "meshed" even though it's part of a region (for stats)
-		stats_chunks_meshed += 1
-
-		# Add to region immediately
-		_add_chunk_to_region(chunk)
-
-		# Check if initial chunks are ready
-		_check_initial_chunks_ready()
+		if thread_pool and mesh_builder:
+			var priority: float = 1.0 / max(tracked_position.distance_to(chunk.get_world_position()), 1.0)
+			thread_pool.queue_meshing_job(chunk, mesh_builder, priority)
+		else:
+			# Fallback to synchronous meshing (should not happen with threading enabled)
+			chunk.cached_mesh_arrays = mesh_builder.build_mesh_arrays(chunk)
+			chunk.state = Chunk.State.ACTIVE
+			stats_chunks_meshed += 1
+			_add_chunk_to_region(chunk)
+			_check_initial_chunks_ready()
 	else:
 		# Traditional mode: Build individual chunk mesh (potentially threaded)
 		chunk.state = Chunk.State.MESHING
@@ -274,25 +277,35 @@ func _on_meshing_completed(job) -> void:
 	if mesh_data.is_empty():
 		return
 
-	# Get old mesh instance if this is a rebuild (only if region batching disabled)
-	var old_mesh: MeshInstance3D = null
-	if not enable_region_batching and chunk.has_meta("old_mesh_instance"):
-		var meta_mesh = chunk.get_meta("old_mesh_instance")
-		# CRITICAL: Validate the mesh instance - it might have been freed!
-		if meta_mesh and is_instance_valid(meta_mesh):
-			old_mesh = meta_mesh
-		else:
-			# Stale reference - clean it up
-			chunk.remove_meta("old_mesh_instance")
-
 	# Handle mesh creation based on batching mode
 	if enable_region_batching:
-		# Region batching mode: Don't create individual mesh instances
-		# The region will combine multiple chunks into one mesh
-		# Just activate the chunk and add to region
-		pass
+		# Region batching mode: Cache the mesh arrays for fast region rebuilding
+		# Extract arrays from mesh_data if available
+		if mesh_data.has("arrays") and mesh_data.arrays is Array:
+			chunk.cached_mesh_arrays = mesh_data.arrays
+
+		# Activate chunk
+		chunk.state = Chunk.State.ACTIVE
+		stats_chunks_meshed += 1
+
+		# Add chunk to region (will use cached arrays)
+		_add_chunk_to_region(chunk)
+
+		# Check if initial chunks are ready
+		_check_initial_chunks_ready()
 	else:
 		# Traditional mode: Create individual mesh instance per chunk
+		# Get old mesh instance if this is a rebuild
+		var old_mesh: MeshInstance3D = null
+		if chunk.has_meta("old_mesh_instance"):
+			var meta_mesh = chunk.get_meta("old_mesh_instance")
+			# CRITICAL: Validate the mesh instance - it might have been freed!
+			if meta_mesh and is_instance_valid(meta_mesh):
+				old_mesh = meta_mesh
+			else:
+				# Stale reference - clean it up
+				chunk.remove_meta("old_mesh_instance")
+
 		var mesh_instance: MeshInstance3D = mesh_builder.create_mesh_instance_from_data(mesh_data)
 		if mesh_instance:
 			chunk.mesh_instance = mesh_instance
@@ -306,11 +319,10 @@ func _on_meshing_completed(job) -> void:
 			old_mesh.queue_free()
 			chunk.remove_meta("old_mesh_instance")
 
-	# Activate chunk
-	chunk.state = Chunk.State.ACTIVE
+		# Activate chunk
+		chunk.state = Chunk.State.ACTIVE
 
-	# Add chunk to region (if region batching enabled)
-	if enable_region_batching:
+		# Add chunk to region (if somehow needed)
 		_add_chunk_to_region(chunk)
 
 	# Mark occlusion graph as dirty (new chunk added)

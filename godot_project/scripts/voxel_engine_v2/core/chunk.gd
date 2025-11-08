@@ -22,6 +22,10 @@ var voxel_data: VoxelData = null
 ## Mesh instance for rendering (created by ChunkManager)
 var mesh_instance: MeshInstance3D = null
 
+## Cached mesh arrays for region batching (avoid rebuilding mesh from voxels every time)
+## This is the key optimization: build once, reuse many times
+var cached_mesh_arrays: Array = []
+
 ## Collision shape (if needed)
 var collision_shape: CollisionShape3D = null
 
@@ -73,6 +77,9 @@ func cleanup() -> void:
 	for key in neighbors.keys():
 		neighbors[key] = null
 
+	# Clear cached mesh arrays
+	cached_mesh_arrays.clear()
+
 	# Clear any mesh-related metadata to prevent stale references
 	if has_meta("old_mesh_instance"):
 		remove_meta("old_mesh_instance")
@@ -93,6 +100,8 @@ func set_voxel(local_pos: Vector3i, voxel_type: int) -> void:
 	if voxel_data:
 		voxel_data.set_voxel(local_pos, voxel_type)
 		is_mesh_dirty = true
+		# Invalidate cached mesh arrays since voxel data changed
+		cached_mesh_arrays.clear()
 
 ## Convert local position to world position
 func local_to_world(local_pos: Vector3i) -> Vector3i:

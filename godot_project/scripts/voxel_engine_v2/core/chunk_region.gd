@@ -104,6 +104,8 @@ func rebuild_combined_mesh(mesh_builder) -> void:
 
 	var vertex_offset := 0
 	var total_chunks_processed := 0
+	var cache_hits := 0
+	var cache_misses := 0
 
 	# Process each chunk in the region
 	for chunk in chunks.values():
@@ -115,8 +117,19 @@ func rebuild_combined_mesh(mesh_builder) -> void:
 		if chunk.state != Chunk.State.ACTIVE:
 			continue
 
-		# Build mesh arrays for this chunk
-		var chunk_arrays: Array = mesh_builder.build_mesh_arrays(chunk)
+		# Use cached mesh arrays if available (MAJOR OPTIMIZATION)
+		# This avoids rebuilding the mesh from voxel data every time
+		var chunk_arrays: Array = []
+		if not chunk.cached_mesh_arrays.is_empty():
+			# Cache hit - use pre-built arrays (FAST!)
+			chunk_arrays = chunk.cached_mesh_arrays
+			cache_hits += 1
+		else:
+			# Cache miss - build mesh arrays and cache them (SLOW!)
+			# This should only happen during the first region rebuild after chunk load
+			chunk_arrays = mesh_builder.build_mesh_arrays(chunk)
+			chunk.cached_mesh_arrays = chunk_arrays
+			cache_misses += 1
 
 		if chunk_arrays.is_empty():
 			continue
@@ -207,10 +220,12 @@ func rebuild_combined_mesh(mesh_builder) -> void:
 	var rebuild_time_us := Time.get_ticks_usec() - start_time
 	last_rebuild_time_ms = rebuild_time_us / 1000.0
 
-	# Log performance warning if rebuild took too long
-	if last_rebuild_time_ms > REBUILD_TIME_BUDGET_MS:
-		print("[ChunkRegion] WARNING: Region %s rebuild took %.1fms (budget: %.1fms) - %d chunks, %d vertices" % [
-			region_position, last_rebuild_time_ms, REBUILD_TIME_BUDGET_MS, total_chunks_processed, vertex_count
+	# Log performance (always show during initial load to demonstrate improvement)
+	var cache_hit_rate := (cache_hits * 100.0 / total_chunks_processed) if total_chunks_processed > 0 else 0.0
+	if last_rebuild_time_ms > REBUILD_TIME_BUDGET_MS or cache_misses > 0:
+		print("[ChunkRegion] Region %s: %.1fms, %d chunks (%d vertices), cache: %d hits/%d misses (%.0f%% hit rate)" % [
+			region_position, last_rebuild_time_ms, total_chunks_processed, vertex_count,
+			cache_hits, cache_misses, cache_hit_rate
 		])
 
 ## Get the world position of this region's origin
