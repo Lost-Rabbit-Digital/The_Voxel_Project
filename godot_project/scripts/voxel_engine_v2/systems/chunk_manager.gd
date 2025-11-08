@@ -196,7 +196,7 @@ func _on_generation_completed(job) -> void:
 	meshing_chunks[chunk_pos] = chunk
 
 	if thread_pool:
-		var priority := 1.0 / max(tracked_position.distance_to(chunk.get_world_position()), 1.0)
+		var priority: float = 1.0 / max(tracked_position.distance_to(chunk.get_world_position()), 1.0)
 		thread_pool.queue_meshing_job(chunk, mesh_builder, priority)
 	else:
 		# Fallback to synchronous meshing
@@ -224,7 +224,7 @@ func _on_meshing_completed(job) -> void:
 		return
 
 	# Create mesh instance on main thread
-	var mesh_instance := mesh_builder.create_mesh_instance_from_data(mesh_data)
+	var mesh_instance: MeshInstance3D = mesh_builder.create_mesh_instance_from_data(mesh_data)
 	if mesh_instance:
 		chunk.mesh_instance = mesh_instance
 		mesh_instance.position = chunk.get_world_position()
@@ -252,7 +252,7 @@ func update_frustum_culling(camera: Camera3D) -> void:
 			continue
 
 		# Get chunk AABB
-		var aabb := chunk.get_aabb()
+		var aabb: AABB = chunk.get_aabb()
 
 		# Check if AABB intersects frustum
 		var is_visible := _aabb_intersects_frustum(aabb, frustum)
@@ -405,7 +405,7 @@ func _calculate_chunk_priority(chunk_pos: Vector3i, player_position: Vector3, ca
 
 	# Calculate distance from player (inverse priority - closer is higher)
 	var distance := player_position.distance_to(chunk_world_pos)
-	var distance_priority := 1.0 / max(distance, 1.0)  # Avoid division by zero
+	var distance_priority: float = 1.0 / max(distance, 1.0)  # Avoid division by zero
 
 	# Calculate direction from player to chunk
 	var to_chunk := (chunk_world_pos - player_position).normalized()
@@ -414,11 +414,11 @@ func _calculate_chunk_priority(chunk_pos: Vector3i, player_position: Vector3, ca
 	var direction_alignment := camera_forward.dot(to_chunk)
 
 	# Boost priority for chunks in front of camera
-	var direction_priority := max(direction_alignment, 0.0)  # 0.0 to 1.0
+	var direction_priority: float = max(direction_alignment, 0.0)  # 0.0 to 1.0
 
 	# Combined priority (weighted sum)
 	# Distance is more important (weight 2.0), direction is secondary (weight 1.0)
-	var priority := (distance_priority * 2.0) + (direction_priority * 1.0)
+	var priority: float = (distance_priority * 2.0) + (direction_priority * 1.0)
 
 	return priority
 
@@ -453,13 +453,13 @@ func _load_chunk_threaded(chunk_pos: Vector3i) -> Chunk:
 			# Queue mesh building
 			chunk.state = Chunk.State.MESHING
 			meshing_chunks[chunk_pos] = chunk
-			var priority := 1.0 / max(tracked_position.distance_to(chunk.get_world_position()), 1.0)
+			var priority: float = 1.0 / max(tracked_position.distance_to(chunk.get_world_position()), 1.0)
 			thread_pool.queue_meshing_job(chunk, mesh_builder, priority)
 			return chunk
 
 	# Not cached - queue terrain generation
 	generating_chunks[chunk_pos] = true
-	var priority := 1.0 / max(tracked_position.distance_to(Vector3(chunk_pos * VoxelData.CHUNK_SIZE)), 1.0)
+	var priority: float = 1.0 / max(tracked_position.distance_to(Vector3(chunk_pos * VoxelData.CHUNK_SIZE)), 1.0)
 	thread_pool.queue_generation_job(chunk_pos, terrain_generator, priority)
 	return null
 
