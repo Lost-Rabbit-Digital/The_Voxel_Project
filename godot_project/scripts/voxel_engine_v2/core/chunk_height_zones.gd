@@ -62,7 +62,7 @@ static func world_y_to_chunk_y(world_y: int) -> int:
 	var zone_config = ZONE_CONFIG[zone]
 
 	# Calculate Y position relative to zone start
-	var y_in_zone := world_y - zone_config.y_min
+	var y_in_zone: int = world_y - zone_config.y_min
 
 	# Calculate chunk index within this zone
 	var chunk_y_in_zone := floori(float(y_in_zone) / zone_config.chunk_height)
@@ -94,7 +94,7 @@ static func chunk_y_to_world_y(chunk_y: int) -> int:
 	# Process each zone in order
 	for zone_id in [Zone.DEEP_VOID, Zone.DENSE, Zone.SKY]:
 		var zone_config = ZONE_CONFIG[zone_id]
-		var zone_height := zone_config.y_max - zone_config.y_min
+		var zone_height: int = zone_config.y_max - zone_config.y_min
 		var chunks_in_zone := ceili(float(zone_height) / zone_config.chunk_height)
 
 		if remaining_chunks < chunks_in_zone:
@@ -119,10 +119,10 @@ static func get_actual_chunk_y_size(chunk_pos: Vector3i) -> int:
 	var world_y_bottom := chunk_y_to_world_y(chunk_pos.y)
 	var zone := get_zone_at_y(world_y_bottom)
 	var zone_config = ZONE_CONFIG[zone]
-	var chunk_height := zone_config.chunk_height
+	var chunk_height: int = zone_config.chunk_height
 
 	# Check if chunk extends beyond zone boundary
-	var world_y_top := world_y_bottom + chunk_height
+	var world_y_top: int = world_y_bottom + chunk_height
 	if world_y_top > zone_config.y_max:
 		# Chunk is cut off at zone boundary
 		return zone_config.y_max - world_y_bottom
@@ -161,7 +161,7 @@ static func get_zone_stats() -> Dictionary:
 
 	for zone_id in Zone.values():
 		var zone_config = ZONE_CONFIG[zone_id]
-		var zone_height := zone_config.y_max - zone_config.y_min
+		var zone_height: int = zone_config.y_max - zone_config.y_min
 		var chunks_in_zone := ceili(float(zone_height) / zone_config.chunk_height)
 
 		stats[Zone.keys()[zone_id]] = {
@@ -182,7 +182,7 @@ static func print_zone_config() -> void:
 
 	for zone_id in [Zone.DEEP_VOID, Zone.DENSE, Zone.SKY]:
 		var zone_config = ZONE_CONFIG[zone_id]
-		var zone_height := zone_config.y_max - zone_config.y_min
+		var zone_height: int = zone_config.y_max - zone_config.y_min
 		var chunks_in_zone := ceili(float(zone_height) / zone_config.chunk_height)
 
 		print("%s (Y: %d to %d):" % [zone_config.name, zone_config.y_min, zone_config.y_max])
@@ -226,7 +226,7 @@ static func test_adaptive_sizing() -> void:
 		var zone := get_zone_at_y(world_y)
 		var chunk_height := get_chunk_height_at_y(world_y)
 		var chunk_y := world_y_to_chunk_y(world_y)
-		var zone_name := ZONE_CONFIG[zone].name
+		var zone_name: String = ZONE_CONFIG[zone].name
 
 		print("Y=%d -> Zone: %s, Chunk Height: %d, Chunk Y: %d" % [
 			world_y, zone_name, chunk_height, chunk_y

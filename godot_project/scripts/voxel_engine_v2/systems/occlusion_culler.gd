@@ -189,7 +189,7 @@ func _get_visible_neighbors(chunk_pos: Vector3i, active_chunks: Dictionary) -> A
 	]
 
 	for offset in neighbor_offsets:
-		var neighbor_pos := chunk_pos + offset
+		var neighbor_pos: Vector3i = chunk_pos + offset
 
 		# Check if neighbor exists and is active
 		if neighbor_pos in active_chunks:

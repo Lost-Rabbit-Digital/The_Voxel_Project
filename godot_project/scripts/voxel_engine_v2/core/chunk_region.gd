@@ -107,7 +107,7 @@ func rebuild_combined_mesh(mesh_builder) -> void:
 			continue
 
 		# Build mesh arrays for this chunk
-		var chunk_arrays := mesh_builder.build_mesh_arrays(chunk)
+		var chunk_arrays: Array = mesh_builder.build_mesh_arrays(chunk)
 
 		if chunk_arrays.is_empty():
 			continue
@@ -123,7 +123,7 @@ func rebuild_combined_mesh(mesh_builder) -> void:
 			continue
 
 		# Offset vertices by chunk position (relative to region origin)
-		var chunk_offset := chunk.get_world_position() - get_region_world_position()
+		var chunk_offset: Vector3 = chunk.get_world_position() - get_region_world_position()
 
 		for i in range(chunk_vertices.size()):
 			vertices.append(chunk_vertices[i] + chunk_offset)

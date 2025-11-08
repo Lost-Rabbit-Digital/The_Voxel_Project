@@ -197,29 +197,31 @@ func serialize() -> PackedByteArray:
 		return bytes
 
 	# Non-uniform: prefix with flag + data
+	var chunk_volume := get_chunk_volume()
 	var bytes := PackedByteArray()
-	bytes.resize(1 + CHUNK_VOLUME)
+	bytes.resize(1 + chunk_volume)
 	bytes[0] = 0  # Non-uniform flag
-	for i in range(CHUNK_VOLUME):
+	for i in range(chunk_volume):
 		bytes[i + 1] = data[i]
 	return bytes
 
 ## Deserialize voxel data from bytes
 static func deserialize(bytes: PackedByteArray, chunk_pos: Vector3i) -> VoxelData:
 	var voxel_data := VoxelData.new(chunk_pos)
+	var chunk_volume := voxel_data.get_chunk_volume()
 
 	if bytes.size() == 2 and bytes[0] == 1:
 		# Uniform chunk
 		voxel_data.is_uniform = true
 		voxel_data.uniform_value = bytes[1]
-	elif bytes.size() == CHUNK_VOLUME + 1 and bytes[0] == 0:
+	elif bytes.size() == chunk_volume + 1 and bytes[0] == 0:
 		# Non-uniform chunk
 		voxel_data.is_uniform = false
 		voxel_data.data = PackedByteArray()
-		voxel_data.data.resize(CHUNK_VOLUME)
-		for i in range(CHUNK_VOLUME):
+		voxel_data.data.resize(chunk_volume)
+		for i in range(chunk_volume):
 			voxel_data.data[i] = bytes[i + 1]
-	elif bytes.size() == CHUNK_VOLUME:
+	elif bytes.size() == chunk_volume:
 		# Legacy format (no uniform flag)
 		voxel_data.is_uniform = false
 		voxel_data.data = bytes.duplicate()
