@@ -169,6 +169,12 @@ func _initialize_systems() -> void:
 	print("[VoxelWorld] Connecting systems...")
 	chunk_manager.terrain_generator = terrain_generator
 	chunk_manager.mesh_builder = mesh_builder
+
+	# Set chunk cache seed
+	if chunk_manager.chunk_cache:
+		print("[VoxelWorld] Setting chunk cache seed to %d..." % world_seed)
+		chunk_manager.chunk_cache.set_world_seed(world_seed)
+
 	print("[VoxelWorld] Systems connected")
 
 	print("[VoxelWorld] ✓ All systems initialized successfully!")
@@ -220,6 +226,15 @@ func _update_debug_info(delta: float) -> void:
 	debug_text += "Generated: %d\n" % stats.get("chunks_generated", 0)
 	debug_text += "Meshed: %d\n" % stats.get("chunks_meshed", 0)
 	debug_text += "\n"
+
+	# Add cache stats if enabled
+	if stats.get("cache_enabled", false):
+		debug_text += "Cache Hits: %d\n" % stats.get("cache_hits", 0)
+		debug_text += "Cache Misses: %d\n" % stats.get("cache_misses", 0)
+		debug_text += "Hit Rate: %.1f%%\n" % stats.get("cache_hit_rate", 0.0)
+		debug_text += "Cache Size: %.1f MB\n" % stats.get("cache_size_mb", 0.0)
+		debug_text += "\n"
+
 	debug_text += "Seed: %d\n" % world_seed
 
 	debug_label.text = debug_text
@@ -259,6 +274,10 @@ func regenerate_world(new_seed: int = 0) -> void:
 	world_seed = new_seed
 	if terrain_generator:
 		terrain_generator.set_world_seed(world_seed)
+
+	# Update chunk cache seed
+	if chunk_manager and chunk_manager.chunk_cache:
+		chunk_manager.chunk_cache.set_world_seed(world_seed)
 
 	# Reload chunks
 	_update_chunks()

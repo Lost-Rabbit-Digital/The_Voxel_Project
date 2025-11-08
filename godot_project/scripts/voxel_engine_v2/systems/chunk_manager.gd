@@ -9,6 +9,8 @@ extends Node3D
 @export var vertical_render_distance: int = 4
 @export var enable_pooling: bool = true
 @export var pool_size: int = 128
+@export var enable_chunk_cache: bool = true
+@export var cache_size_limit_mb: int = 500
 
 ## Active chunks in the world (Vector3i chunk_pos -> Chunk)
 var active_chunks: Dictionary = {}
@@ -31,6 +33,7 @@ const MAX_CHUNKS_PER_FRAME: int = 4
 ## References to other systems (set by VoxelWorld)
 var terrain_generator = null
 var mesh_builder = null
+var chunk_cache: ChunkCache = null
 
 ## Statistics
 var stats_active_chunks: int = 0
@@ -45,11 +48,20 @@ func _ready() -> void:
 	print("  - vertical_render_distance: %d" % vertical_render_distance)
 	print("  - enable_pooling: %s" % enable_pooling)
 	print("  - pool_size: %d" % pool_size)
+	print("  - enable_chunk_cache: %s" % enable_chunk_cache)
+	print("  - cache_size_limit_mb: %d MB" % cache_size_limit_mb)
 
 	# Initialize VoxelTypes registry
 	print("[ChunkManager] Initializing VoxelTypes registry...")
 	VoxelTypes.initialize()
 	print("[ChunkManager] VoxelTypes initialized with %d block types" % VoxelTypes.Type.size())
+
+	# Initialize chunk cache (seed will be set by VoxelWorld)
+	if enable_chunk_cache:
+		print("[ChunkManager] Initializing chunk cache...")
+		chunk_cache = ChunkCache.new(0, true)
+		chunk_cache.max_cache_size_mb = cache_size_limit_mb
+		print("[ChunkManager] Chunk cache initialized")
 
 	# Pre-populate chunk pool
 	if enable_pooling:
@@ -304,22 +316,34 @@ func load_chunk(chunk_pos: Vector3i) -> Chunk:
 	# Reduce console spam - only log warnings
 	# print("[ChunkManager] Loading chunk at %s..." % chunk_pos)
 
-	# Get chunk from pool or create new
-	var chunk := _get_chunk_from_pool()
-	# print("[ChunkManager]   Got chunk from pool (pooled: %d)" % chunk_pool.size())
-	chunk.initialize(chunk_pos)
-	chunk.state = Chunk.State.GENERATING
+	# Try to load from cache first
+	var chunk: Chunk = null
+	var loaded_from_cache := false
 
-	# Generate terrain data
-	if terrain_generator:
-		# print("[ChunkManager]   Generating terrain...")
-		chunk.voxel_data = terrain_generator.generate_chunk(chunk_pos)
-		stats_chunks_generated += 1
-		# var solid_count := chunk.voxel_data.count_solid_voxels()
-		# print("[ChunkManager]   Generated %d solid voxels" % solid_count)
-	else:
-		print("[ChunkManager]   WARNING: No terrain generator, using test pattern")
-		_generate_test_chunk(chunk)
+	if chunk_cache and chunk_cache.has_cached_chunk(chunk_pos):
+		chunk = chunk_cache.load_chunk(chunk_pos)
+		if chunk:
+			loaded_from_cache = true
+			# print("[ChunkManager]   Loaded chunk from cache")
+
+	# If not cached, create new chunk and generate terrain
+	if not chunk:
+		# Get chunk from pool or create new
+		chunk = _get_chunk_from_pool()
+		# print("[ChunkManager]   Got chunk from pool (pooled: %d)" % chunk_pool.size())
+		chunk.initialize(chunk_pos)
+		chunk.state = Chunk.State.GENERATING
+
+		# Generate terrain data
+		if terrain_generator:
+			# print("[ChunkManager]   Generating terrain...")
+			chunk.voxel_data = terrain_generator.generate_chunk(chunk_pos)
+			stats_chunks_generated += 1
+			# var solid_count := chunk.voxel_data.count_solid_voxels()
+			# print("[ChunkManager]   Generated %d solid voxels" % solid_count)
+		else:
+			print("[ChunkManager]   WARNING: No terrain generator, using test pattern")
+			_generate_test_chunk(chunk)
 
 	# Skip empty chunks
 	if chunk.is_empty():
@@ -372,6 +396,14 @@ func unload_chunk(chunk_pos: Vector3i) -> void:
 
 	var chunk: Chunk = active_chunks[chunk_pos]
 	chunk.state = Chunk.State.UNLOADING
+
+	# Save to cache before unloading (if not empty)
+	if chunk_cache and not chunk.is_empty():
+		if not chunk_cache.is_cache_full():
+			chunk_cache.save_chunk(chunk)
+			# print("[ChunkManager]   Saved chunk to cache")
+		# else:
+		# 	print("[ChunkManager]   WARNING: Cache is full, not saving chunk")
 
 	# Remove mesh from scene
 	if chunk.mesh_instance:
@@ -575,14 +607,29 @@ func cleanup_all() -> void:
 	active_chunks.clear()
 	chunk_pool.clear()
 
+	# Print cache stats on cleanup
+	if chunk_cache:
+		chunk_cache.print_stats()
+
 ## Get statistics for debugging
 func get_stats() -> Dictionary:
-	return {
+	var stats := {
 		"active_chunks": stats_active_chunks,
 		"pooled_chunks": stats_pooled_chunks,
 		"chunks_generated": stats_chunks_generated,
 		"chunks_meshed": stats_chunks_meshed
 	}
+
+	# Add cache stats if available
+	if chunk_cache:
+		var cache_stats := chunk_cache.get_stats()
+		stats["cache_enabled"] = cache_stats.enabled
+		stats["cache_hits"] = cache_stats.cache_hits
+		stats["cache_misses"] = cache_stats.cache_misses
+		stats["cache_hit_rate"] = cache_stats.hit_rate
+		stats["cache_size_mb"] = cache_stats.cache_size_mb
+
+	return stats
 
 ## Print debug info
 func print_stats() -> void:
@@ -591,3 +638,12 @@ func print_stats() -> void:
 	print("  Pooled chunks: %d" % stats_pooled_chunks)
 	print("  Total generated: %d" % stats_chunks_generated)
 	print("  Total meshed: %d" % stats_chunks_meshed)
+
+	# Print cache stats
+	if chunk_cache:
+		var cache_stats := chunk_cache.get_stats()
+		print("  Cache enabled: %s" % cache_stats.enabled)
+		print("  Cache hits: %d" % cache_stats.cache_hits)
+		print("  Cache misses: %d" % cache_stats.cache_misses)
+		print("  Cache hit rate: %.1f%%" % cache_stats.hit_rate)
+		print("  Cache size: %.2f MB" % cache_stats.cache_size_mb)
