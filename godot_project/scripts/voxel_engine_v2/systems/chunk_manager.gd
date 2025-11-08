@@ -96,6 +96,10 @@ var chunk_cache: ChunkCache = null
 var thread_pool: ChunkThreadPool = null
 var occlusion_culler: OcclusionCuller = null
 
+## Frustum culling optimization - spread work over multiple frames
+const FRUSTUM_CULL_FRAMES: int = 4  # Check 1/4 of regions per frame
+var frustum_cull_frame_counter: int = 0
+
 ## Statistics
 var stats_active_chunks: int = 0
 var stats_pooled_chunks: int = 0
@@ -432,6 +436,11 @@ func update_frustum_culling(camera: Camera3D) -> void:
 	if occlusion_culler and occlusion_culler.mode != OcclusionCuller.Mode.DISABLED:
 		occlusion_culler.update_visibility(camera.global_position, active_chunks)
 
+	# OPTIMIZATION: Spread frustum culling over multiple frames
+	# Instead of checking ALL regions/chunks every frame (causes 180-250ms stalls),
+	# check only a subset per frame (reduces to ~45-60ms)
+	frustum_cull_frame_counter = (frustum_cull_frame_counter + 1) % FRUSTUM_CULL_FRAMES
+
 	# Region batching mode: Cull at region level
 	if enable_region_batching:
 		_update_region_culling(frustum)
@@ -440,13 +449,26 @@ func update_frustum_culling(camera: Camera3D) -> void:
 		_update_chunk_culling(frustum)
 
 ## Update culling for regions (batched mode)
+## OPTIMIZED: Only checks a subset of regions per frame to avoid stalls
 func _update_region_culling(frustum: Array[Plane]) -> void:
 	var visible_count := 0
 	var hidden_count := 0
+	var checked_count := 0
 
+	# OPTIMIZATION: Only check 1/FRUSTUM_CULL_FRAMES of regions this frame
+	# This spreads the work over multiple frames to prevent 180-250ms stalls
+	var region_index := 0
 	for region in active_regions.values():
 		if not region or not region.mesh_instance:
+			region_index += 1
 			continue
+
+		# Only check this region if it's this frame's turn (mod-based distribution)
+		if (region_index % FRUSTUM_CULL_FRAMES) != frustum_cull_frame_counter:
+			region_index += 1
+			continue
+
+		checked_count += 1
 
 		# Get region AABB
 		var aabb: AABB = region.get_aabb()
@@ -466,15 +488,30 @@ func _update_region_culling(frustum: Array[Plane]) -> void:
 		else:
 			hidden_count += 1
 
+		region_index += 1
+
 ## Update culling for individual chunks (traditional mode)
+## OPTIMIZED: Only checks a subset of chunks per frame to avoid stalls
 func _update_chunk_culling(frustum: Array[Plane]) -> void:
 	var frustum_visible_count := 0
 	var frustum_hidden_count := 0
 	var occlusion_hidden_count := 0
+	var checked_count := 0
 
+	# OPTIMIZATION: Only check 1/FRUSTUM_CULL_FRAMES of chunks this frame
+	# This spreads the work over multiple frames to prevent stalls
+	var chunk_index := 0
 	for chunk in active_chunks.values():
 		if not chunk or not chunk.mesh_instance:
+			chunk_index += 1
 			continue
+
+		# Only check this chunk if it's this frame's turn (mod-based distribution)
+		if (chunk_index % FRUSTUM_CULL_FRAMES) != frustum_cull_frame_counter:
+			chunk_index += 1
+			continue
+
+		checked_count += 1
 
 		# Get chunk AABB
 		var aabb: AABB = chunk.get_aabb()
@@ -501,6 +538,8 @@ func _update_chunk_culling(frustum: Array[Plane]) -> void:
 				occlusion_hidden_count += 1
 		else:
 			frustum_hidden_count += 1
+
+		chunk_index += 1
 
 	# Optionally log culling stats (can be disabled for performance)
 	# print("[ChunkManager] Culling: %d frustum visible, %d frustum hidden, %d occluded" % [frustum_visible_count, frustum_hidden_count, occlusion_hidden_count])
