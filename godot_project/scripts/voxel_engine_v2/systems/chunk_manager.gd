@@ -217,6 +217,11 @@ func _on_meshing_completed(job) -> void:
 	if not chunk:
 		return
 
+	# CRITICAL: Check if chunk is still valid (might have been freed during async meshing)
+	if not is_instance_valid(chunk):
+		# Chunk was unloaded while mesh was being built - discard the mesh
+		return
+
 	# Check for errors
 	if job.error:
 		print("[ChunkManager] Meshing error for chunk %s: %s" % [chunk_pos, job.error])
@@ -241,7 +246,7 @@ func _on_meshing_completed(job) -> void:
 		stats_chunks_meshed += 1
 
 	# Now remove old mesh after new one is visible (prevents flashing)
-	if old_mesh:
+	if old_mesh and is_instance_valid(old_mesh):
 		remove_child(old_mesh)
 		old_mesh.queue_free()
 		chunk.remove_meta("old_mesh_instance")
