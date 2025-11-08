@@ -166,9 +166,11 @@ func _get_neighbor_chunk(chunk: Chunk, direction: Vector3i) -> Chunk:
 	elif direction == Vector3i.DOWN:
 		return chunk.get_neighbor("down")
 	elif direction == Vector3i.FORWARD:
-		return chunk.get_neighbor("north")
-	elif direction == Vector3i.BACK:
+		# FORWARD is (0,0,-1) which is negative Z, maps to "south"
 		return chunk.get_neighbor("south")
+	elif direction == Vector3i.BACK:
+		# BACK is (0,0,1) which is positive Z, maps to "north"
+		return chunk.get_neighbor("north")
 	elif direction == Vector3i.RIGHT:
 		return chunk.get_neighbor("east")
 	elif direction == Vector3i.LEFT:
