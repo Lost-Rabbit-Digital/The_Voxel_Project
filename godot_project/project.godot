@@ -14,12 +14,14 @@ config/name="Steel and Cube"
 config/description="Dungeon crawler with RPG elements in a voxel-based world."
 config/version="1.0.0"
 config/tags=PackedStringArray("open_sourced", "prototype")
-run/main_scene="uid://cs7j84kqgxfgb"
+run/main_scene="uid://bxs7qk8hvn3yp"
 config/features=PackedStringArray("4.5", "GL Compatibility")
 config/icon="uid://ce7ub8p17vdqb"
 
 [autoload]
 
+GameManager="*res://scripts/autoload/game_manager.gd"
+LoadingManager="*res://scripts/autoload/loading_manager.gd"
 DebugMenu="*res://addons/debug_menu/debug_menu.tscn"
 
 [display]

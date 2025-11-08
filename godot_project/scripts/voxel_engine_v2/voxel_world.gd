@@ -49,8 +49,22 @@ func _ready() -> void:
 	print("  - chunk_pool_size: %d" % chunk_pool_size)
 	print("========================================")
 
+	# Report loading progress if LoadingManager exists
+	if LoadingManager:
+		LoadingManager.start_loading(5)  # 5 initialization steps
+		LoadingManager.update_progress("Initializing voxel systems...")
+
 	_initialize_systems()
+
+	if LoadingManager:
+		LoadingManager.complete_task("Systems initialized")
+		LoadingManager.update_progress("Setting up debug UI...")
+
 	_setup_debug_ui()
+
+	if LoadingManager:
+		LoadingManager.complete_task("Debug UI created")
+		LoadingManager.update_progress("Finding player...")
 
 	# Find player if path is set
 	if not player_node_path.is_empty():
@@ -65,12 +79,27 @@ func _ready() -> void:
 	else:
 		print("[VoxelWorld] No player node path set, using default position")
 
+	if LoadingManager:
+		LoadingManager.complete_task("Player located")
+		LoadingManager.update_progress("Generating initial terrain...")
+
 	# Start with initial chunk load
 	if enable_auto_generation:
 		print("[VoxelWorld] Starting initial chunk generation...")
 		_update_chunks()
 	else:
 		print("[VoxelWorld] Auto-generation disabled")
+
+	if LoadingManager:
+		LoadingManager.complete_task("Initial chunks generated")
+		LoadingManager.update_progress("Finalizing...")
+
+	# Wait a frame to ensure everything is set up
+	await get_tree().process_frame
+
+	if LoadingManager:
+		LoadingManager.complete_task("World ready")
+		LoadingManager.finish_loading()
 
 func _process(delta: float) -> void:
 	# Update tracked position
@@ -214,10 +243,28 @@ func regenerate_world(new_seed: int = 0) -> void:
 	# Reload chunks
 	_update_chunks()
 
+## Cleanup all systems
+func cleanup() -> void:
+	print("[VoxelWorld] Cleaning up...")
+
+	if chunk_manager:
+		print("[VoxelWorld] Cleaning up chunk manager...")
+		chunk_manager.cleanup_all()
+
+	if terrain_generator:
+		print("[VoxelWorld] Cleaning up terrain generator...")
+		terrain_generator = null
+
+	if mesh_builder:
+		print("[VoxelWorld] Cleaning up mesh builder...")
+		mesh_builder = null
+
+	print("[VoxelWorld] Cleanup complete")
+
 ## Cleanup on exit
 func _exit_tree() -> void:
-	if chunk_manager:
-		chunk_manager.cleanup_all()
+	print("[VoxelWorld] _exit_tree called")
+	cleanup()
 
 ## Debug commands (can be called from console/debug menu)
 func debug_print_stats() -> void:
