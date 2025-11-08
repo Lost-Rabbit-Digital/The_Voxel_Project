@@ -141,6 +141,14 @@ var _frame_times: Array[float] = []
 var _last_perf_log: float = 0.0
 const PERF_LOG_INTERVAL: float = 2.0  # Log every 2 seconds
 
+## Handle input for debug toggles
+func _input(event: InputEvent) -> void:
+	# Toggle debug UI with F3
+	if event is InputEventKey:
+		if event.keycode == KEY_F3 and event.pressed and not event.echo:
+			debug_toggle_info()
+			print("[VoxelWorld] Debug UI toggled: %s" % ("ON" if show_debug_info else "OFF"))
+
 func _process(delta: float) -> void:
 	var frame_start := Time.get_ticks_usec()
 
