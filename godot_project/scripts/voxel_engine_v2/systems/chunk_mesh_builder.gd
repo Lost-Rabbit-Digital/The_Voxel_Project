@@ -307,9 +307,9 @@ func _greedy_mesh_direction(st: SurfaceTool, chunk: Chunk, direction: Vector3i) 
 	var chunk_size_z := VoxelData.CHUNK_SIZE_XZ
 
 	var dimensions := [chunk_size_x, chunk_size_y, chunk_size_z]
-	var u_size := dimensions[u_axis]
-	var v_size := dimensions[v_axis]
-	var d_size := dimensions[d_axis]
+	var u_size: int = dimensions[u_axis]
+	var v_size: int = dimensions[v_axis]
+	var d_size: int = dimensions[d_axis]
 
 	# THREAD-SAFE: Allocate mask locally for this direction (reused across slices)
 	# Cannot be a member variable since multiple threads call this simultaneously
