@@ -4,6 +4,9 @@
 class_name ChunkManager
 extends Node3D
 
+## Signals
+signal initial_chunks_ready()  # Emitted once when first batch of chunks is visible
+
 ## Configuration
 @export var render_distance: int = 8
 @export var vertical_render_distance: int = 4
@@ -15,6 +18,12 @@ extends Node3D
 @export var worker_thread_count: int = 4
 @export var max_jobs_per_frame: int = 8
 @export var enable_region_batching: bool = true  # Enable region-based mesh batching
+
+## Minimum chunks to consider "initial load" complete
+const INITIAL_CHUNKS_THRESHOLD: int = 10
+
+## Tracking for initial load
+var _initial_chunks_ready: bool = false
 
 ## Active chunks in the world (Vector3i chunk_pos -> Chunk)
 var active_chunks: Dictionary = {}
@@ -683,6 +692,9 @@ func _build_chunk_mesh_sync(chunk: Chunk) -> void:
 	chunk.state = Chunk.State.ACTIVE
 	meshing_chunks.erase(chunk.position)
 
+	# Check if initial chunks are ready
+	_check_initial_chunks_ready()
+
 	# Rebuild neighbor meshes to remove faces that are now hidden by this chunk
 	_rebuild_neighbor_meshes(chunk.position)
 
@@ -948,6 +960,24 @@ func _generate_test_chunk(chunk: Chunk) -> void:
 					chunk.voxel_data.set_voxel(Vector3i(x, y, z), VoxelTypes.Type.DIRT)
 				elif world_y == height - 1:
 					chunk.voxel_data.set_voxel(Vector3i(x, y, z), VoxelTypes.Type.GRASS)
+
+## Check if initial chunks are ready and emit signal once
+func _check_initial_chunks_ready() -> void:
+	# Only check once
+	if _initial_chunks_ready:
+		return
+
+	# Count active chunks
+	var active_count := 0
+	for chunk in active_chunks.values():
+		if chunk and chunk.state == Chunk.State.ACTIVE:
+			active_count += 1
+
+	# Emit signal once we have enough chunks
+	if active_count >= INITIAL_CHUNKS_THRESHOLD:
+		_initial_chunks_ready = true
+		print("[ChunkManager] Initial chunks ready! (%d active chunks)" % active_count)
+		initial_chunks_ready.emit()
 
 ## Cleanup all chunks
 func cleanup_all() -> void:

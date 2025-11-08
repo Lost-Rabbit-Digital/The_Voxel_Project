@@ -99,6 +99,25 @@ func _ready() -> void:
 	if enable_auto_generation:
 		print("[VoxelWorld] Starting initial chunk generation...")
 		_update_chunks()
+
+		# Wait for initial chunks to be ready (with timeout)
+		print("[VoxelWorld] Waiting for initial chunks to render...")
+		if chunk_manager:
+			var timeout := 10.0  # 10 second timeout
+			var timer := get_tree().create_timer(timeout)
+			var timed_out := false
+
+			# Connect to timeout signal
+			timer.timeout.connect(func(): timed_out = true, CONNECT_ONE_SHOT)
+
+			# Wait for either chunks ready or timeout
+			while not chunk_manager._initial_chunks_ready and not timed_out:
+				await get_tree().process_frame
+
+			if timed_out:
+				print("[VoxelWorld] WARNING: Initial chunk loading timed out after %.1f seconds" % timeout)
+			else:
+				print("[VoxelWorld] Initial chunks rendered successfully!")
 	else:
 		print("[VoxelWorld] Auto-generation disabled")
 
