@@ -174,7 +174,7 @@ func _process_region_rebuild_job(job: ChunkJob, worker_id: int) -> void:
 	var cache_misses := 0
 
 	# Get chunks from region (thread-safe since we're just reading)
-	var chunks_snapshot := region.chunks.values()
+	var chunks_snapshot: Array = region.chunks.values()
 
 	# Process each chunk in the region
 	for chunk in chunks_snapshot:
