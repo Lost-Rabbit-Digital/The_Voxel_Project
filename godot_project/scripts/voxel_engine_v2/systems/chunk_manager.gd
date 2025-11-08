@@ -95,6 +95,10 @@ const MAX_CHUNKS_PER_FRAME: int = 4  # Match region rebuild rate to avoid bottle
 ## Maximum pending jobs in thread pool before we stop queuing new chunks
 const MAX_PENDING_JOBS: int = 32  # Don't overwhelm the workers
 
+## Initial load configuration
+var _is_initial_load: bool = true  # First load uses radial pattern
+var _initial_load_queue: Array[Vector3i] = []  # Pre-sorted radial chunks
+
 ## References to other systems (set by VoxelWorld)
 var terrain_generator = null
 var mesh_builder = null
@@ -175,6 +179,11 @@ func update_chunks(player_position: Vector3, camera_forward: Vector3 = Vector3.F
 	# Always update stats even if we don't recalculate chunks
 	stats_active_chunks = active_chunks.size()
 	stats_pooled_chunks = chunk_pool.size()
+
+	# OPTIMIZATION: First load uses radial pattern for smooth progressive loading
+	if _is_initial_load:
+		_initial_load_chunks(player_position, camera_forward)
+		return
 
 	# Check if we need to update chunk loading
 	var distance := last_update_position.distance_to(player_position)
@@ -596,6 +605,7 @@ func _aabb_intersects_frustum(aabb: AABB, frustum: Array[Plane]) -> bool:
 	return true
 
 ## Calculate which chunks should be loaded based on render distance
+## Returns chunks in RADIAL ORDER (closest to player first) for optimal loading
 func _calculate_needed_chunks(center_pos: Vector3i, result: Dictionary) -> void:
 	var rd := render_distance
 	var vrd := vertical_render_distance
@@ -610,6 +620,99 @@ func _calculate_needed_chunks(center_pos: Vector3i, result: Dictionary) -> void:
 				var manhattan_dist := absi(x) + absi(y) + absi(z)
 				if manhattan_dist <= rd:
 					result[chunk_pos] = true
+
+## Calculate chunks in radial/spiral order (closest first)
+## This is used for initial world load to ensure smooth progressive loading
+## Returns Array of Vector3i in order from closest to farthest
+func _calculate_chunks_radial_order(center_pos: Vector3i) -> Array[Vector3i]:
+	var chunks: Array[Vector3i] = []
+	var rd := render_distance
+	var vrd := vertical_render_distance
+
+	# Build array of chunks with their distances
+	var chunk_distances: Array[Dictionary] = []
+
+	for x in range(-rd, rd + 1):
+		for y in range(-vrd, vrd + 1):
+			for z in range(-rd, rd + 1):
+				var offset := Vector3i(x, y, z)
+				var chunk_pos := center_pos + offset
+
+				# Use manhattan distance for circular pattern
+				var manhattan_dist := absi(x) + absi(y) + absi(z)
+				if manhattan_dist <= rd:
+					# Calculate actual 3D distance for more accurate sorting
+					var distance_sq := x * x + y * y + z * z
+					chunk_distances.append({
+						"pos": chunk_pos,
+						"dist_sq": distance_sq,
+						"manhattan": manhattan_dist
+					})
+
+	# Sort by distance (closest first)
+	chunk_distances.sort_custom(func(a, b): return a.dist_sq < b.dist_sq)
+
+	# Extract sorted positions
+	for entry in chunk_distances:
+		chunks.append(entry.pos)
+
+	return chunks
+
+## Initial chunk loading using radial pattern (SMOOTH PROGRESSIVE LOADING)
+## This is called on first load to ensure chunks load from center outward
+## Similar to how Minecraft and other voxel engines do initial world gen
+func _initial_load_chunks(player_position: Vector3, camera_forward: Vector3) -> void:
+	last_update_position = player_position
+	tracked_position = player_position
+
+	# Get player's chunk position
+	var player_chunk_pos := world_to_chunk_position(player_position)
+
+	# First call: Build the radial load queue (SORTED closest to farthest)
+	if _initial_load_queue.is_empty():
+		print("[ChunkManager] INITIAL LOAD: Building radial chunk queue...")
+		_initial_load_queue = _calculate_chunks_radial_order(player_chunk_pos)
+		print("[ChunkManager] INITIAL LOAD: %d chunks queued in radial order" % _initial_load_queue.size())
+
+	# Process chunks from the queue (limited per frame for smooth loading)
+	var loaded_count := 0
+	var chunks_to_remove: Array[Vector3i] = []
+
+	for chunk_pos in _initial_load_queue:
+		# Skip if already loaded or being processed
+		if chunk_pos in active_chunks or chunk_pos in generating_chunks or chunk_pos in meshing_chunks:
+			chunks_to_remove.append(chunk_pos)
+			continue
+
+		# Load chunk
+		load_chunk(chunk_pos)
+		chunks_to_remove.append(chunk_pos)
+		loaded_count += 1
+
+		# Limit chunks per frame (prevents stuttering during initial load)
+		if loaded_count >= MAX_CHUNKS_PER_FRAME:
+			break
+
+		# Stop if thread pool is getting full
+		if thread_pool and thread_pool.get_pending_job_count() > MAX_PENDING_JOBS:
+			break
+
+	# Remove loaded chunks from queue
+	for chunk_pos in chunks_to_remove:
+		_initial_load_queue.erase(chunk_pos)
+
+	# Check if initial load is complete
+	if _initial_load_queue.is_empty():
+		print("[ChunkManager] INITIAL LOAD: Complete! Switching to normal chunk loading.")
+		_is_initial_load = false
+		# Now that we've loaded all chunks in radial order, switch to normal updates
+	else:
+		# Log progress
+		var progress_pct := (1.0 - float(_initial_load_queue.size()) / float(_initial_load_queue.size() + active_chunks.size())) * 100.0
+		if loaded_count > 0 and _initial_load_queue.size() % 20 == 0:
+			print("[ChunkManager] INITIAL LOAD: %d%% complete (%d chunks loaded, %d remaining)" % [
+				progress_pct, active_chunks.size(), _initial_load_queue.size()
+			])
 
 ## Unload chunks that are too far from player
 func _unload_distant_chunks(needed_chunks: Dictionary) -> void:
@@ -1227,6 +1330,12 @@ func _check_initial_chunks_ready() -> void:
 			initial_chunks_ready.emit()
 			print("[ChunkManager] Initial chunks ready: %d active chunks" % active_count)
 
+## Reset initial load state (useful for teleporting or world regeneration)
+func reset_initial_load() -> void:
+	_is_initial_load = true
+	_initial_load_queue.clear()
+	print("[ChunkManager] Initial load state reset - will use radial loading on next update")
+
 ## Cleanup all chunks
 func cleanup_all() -> void:
 	# Shutdown thread pool first
@@ -1255,6 +1364,10 @@ func cleanup_all() -> void:
 	active_regions.clear()
 	regions_array.clear()
 	dirty_regions.clear()
+
+	# Reset initial load state
+	_is_initial_load = true
+	_initial_load_queue.clear()
 
 	# Print cache stats on cleanup
 	if chunk_cache:

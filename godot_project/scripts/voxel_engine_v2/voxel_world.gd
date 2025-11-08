@@ -343,6 +343,8 @@ func regenerate_world(new_seed: int = 0) -> void:
 	# Clear existing chunks
 	if chunk_manager:
 		chunk_manager.cleanup_all()
+		# Reset initial load state to use radial pattern
+		chunk_manager.reset_initial_load()
 
 	# Update terrain generator seed
 	world_seed = new_seed
