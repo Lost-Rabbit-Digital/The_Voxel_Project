@@ -7,6 +7,7 @@ signal game_ready()
 signal game_exiting()
 
 var is_exiting: bool = false
+var pause_menu: Control = null
 
 func _ready() -> void:
 	print("[GameManager] Initialized")
@@ -14,14 +15,21 @@ func _ready() -> void:
 	# Connect to notification for quit request
 	get_tree().set_auto_accept_quit(false)  # We'll handle quit ourselves
 
+	# Load and add pause menu
+	var pause_menu_scene := load("res://scenes/pause_menu.tscn")
+	if pause_menu_scene:
+		pause_menu = pause_menu_scene.instantiate()
+		add_child(pause_menu)
+		print("[GameManager] Pause menu loaded")
+
 	print("[GameManager] Ready - Game lifecycle manager active")
 
 func _input(event: InputEvent) -> void:
-	# ESC key to quit (for testing and quick exit)
+	# ESC key to toggle pause menu
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.keycode == KEY_ESCAPE:
-			print("[GameManager] ESC pressed, quitting...")
-			_handle_quit_request()
+			if not is_exiting:
+				toggle_pause_menu()
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_WM_CLOSE_REQUEST:
@@ -31,6 +39,16 @@ func _notification(what: int) -> void:
 	elif what == NOTIFICATION_WM_GO_BACK_REQUEST:
 		print("[GameManager] Back button pressed (Android/etc)")
 		_handle_quit_request()
+
+## Toggle pause menu
+func toggle_pause_menu() -> void:
+	if not pause_menu:
+		return
+
+	if pause_menu.is_paused:
+		pause_menu.hide_menu()
+	else:
+		pause_menu.show_menu()
 
 ## Handle quit request with proper cleanup
 func _handle_quit_request() -> void:
