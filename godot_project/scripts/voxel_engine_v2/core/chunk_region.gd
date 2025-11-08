@@ -67,6 +67,10 @@ func mark_dirty() -> void:
 func needs_rebuild() -> bool:
 	return is_dirty and chunk_count > 0
 
+## Frame time budget for region rebuilds (milliseconds)
+## If rebuilding takes longer than this, we should reduce the rate
+const REBUILD_TIME_BUDGET_MS: float = 8.0  # Target 16ms frame time, use max 8ms for rebuilds
+
 ## Rebuild the combined mesh from all chunks in this region
 ## This is the core optimization - combines many chunks into one draw call
 func rebuild_combined_mesh(mesh_builder) -> void:
@@ -74,7 +78,7 @@ func rebuild_combined_mesh(mesh_builder) -> void:
 		push_error("[ChunkRegion] No mesh builder provided for rebuild")
 		return
 
-	var start_time := Time.get_ticks_msec()
+	var start_time := Time.get_ticks_usec()  # Use microseconds for better precision
 
 	# Clear existing mesh
 	if mesh_instance:
@@ -103,7 +107,12 @@ func rebuild_combined_mesh(mesh_builder) -> void:
 
 	# Process each chunk in the region
 	for chunk in chunks.values():
-		if not chunk or chunk.is_empty():
+		# Skip invalid or empty chunks
+		if not chunk or not is_instance_valid(chunk) or chunk.is_empty():
+			continue
+
+		# Skip chunks that aren't fully ready
+		if chunk.state != Chunk.State.ACTIVE:
 			continue
 
 		# Build mesh arrays for this chunk
@@ -195,11 +204,14 @@ func rebuild_combined_mesh(mesh_builder) -> void:
 	# Update stats
 	vertex_count = vertices.size()
 	is_dirty = false
-	last_rebuild_time_ms = Time.get_ticks_msec() - start_time
+	var rebuild_time_us := Time.get_ticks_usec() - start_time
+	last_rebuild_time_ms = rebuild_time_us / 1000.0
 
-	# print("[ChunkRegion] Rebuilt region %s: %d chunks, %d vertices, %.1f ms" % [
-	# 	region_position, total_chunks_processed, vertex_count, last_rebuild_time_ms
-	# ])
+	# Log performance warning if rebuild took too long
+	if last_rebuild_time_ms > REBUILD_TIME_BUDGET_MS:
+		print("[ChunkRegion] WARNING: Region %s rebuild took %.1fms (budget: %.1fms) - %d chunks, %d vertices" % [
+			region_position, last_rebuild_time_ms, REBUILD_TIME_BUDGET_MS, total_chunks_processed, vertex_count
+		])
 
 ## Get the world position of this region's origin
 func get_region_world_position() -> Vector3:

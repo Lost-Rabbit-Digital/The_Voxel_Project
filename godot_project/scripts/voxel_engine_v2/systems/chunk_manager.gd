@@ -24,7 +24,7 @@ signal initial_chunks_ready()  # Emitted once when first batch of chunks is visi
 @export var cache_size_limit_mb: int = 500
 @export var enable_threading: bool = true
 @export var worker_thread_count: int = 4
-@export var max_jobs_per_frame: int = 8
+@export var max_jobs_per_frame: int = 4  # Process fewer jobs per frame to reduce main thread blocking
 @export var enable_region_batching: bool = true  # Enable region-based mesh batching
 
 ## Minimum chunks to consider "initial load" complete
@@ -54,8 +54,11 @@ var active_regions: Dictionary = {}
 ## Regions that need mesh rebuilding
 var dirty_regions: Dictionary = {}  # Vector3i -> true
 
-## Maximum regions to rebuild per frame (prevents stuttering)
-const MAX_REGION_REBUILDS_PER_FRAME: int = 4  # Increased for faster initial load
+## Maximum regions to rebuild per frame (adaptive based on performance)
+var max_region_rebuilds_per_frame: int = 4  # Start conservative, will adapt
+const MIN_REGION_REBUILDS_PER_FRAME: int = 1  # Never go below this
+const MAX_REGION_REBUILDS_PER_FRAME: int = 8  # Never go above this
+const TARGET_FRAME_TIME_MS: float = 16.0  # Target 60 FPS
 
 ## Chunks pending neighbor mesh rebuild (Vector3i -> true) - batched to avoid duplicates
 var pending_neighbor_rebuilds: Dictionary = {}
@@ -67,7 +70,7 @@ var last_update_position: Vector3 = Vector3.ZERO
 const UPDATE_THRESHOLD: float = 8.0
 
 ## Maximum chunks to load per frame (prevents stuttering)
-const MAX_CHUNKS_PER_FRAME: int = 8  # Increased for faster initial load
+const MAX_CHUNKS_PER_FRAME: int = 4  # Match region rebuild rate to avoid bottleneck
 
 ## References to other systems (set by VoxelWorld)
 var terrain_generator = null
@@ -224,6 +227,9 @@ func _on_generation_completed(job) -> void:
 		# Region batching mode: Skip individual chunk meshing
 		# The region will build combined mesh on main thread
 		chunk.state = Chunk.State.ACTIVE
+
+		# Track as "meshed" even though it's part of a region (for stats)
+		stats_chunks_meshed += 1
 
 		# Add to region immediately
 		_add_chunk_to_region(chunk)
@@ -1141,12 +1147,20 @@ func _process_dirty_regions() -> void:
 		return
 
 	var regions_rebuilt := 0
+	var rebuild_start_time := Time.get_ticks_usec()
 
 	# Process dirty regions (limit per frame to avoid stuttering)
 	var regions_to_clear: Array[Vector3i] = []
 
 	for region_pos in dirty_regions.keys():
-		if regions_rebuilt >= MAX_REGION_REBUILDS_PER_FRAME:
+		# Stop if we've hit our limit or exceeded frame budget
+		if regions_rebuilt >= max_region_rebuilds_per_frame:
+			break
+
+		# Check if we're taking too long (emergency brake)
+		var elapsed_ms := (Time.get_ticks_usec() - rebuild_start_time) / 1000.0
+		if elapsed_ms > TARGET_FRAME_TIME_MS * 0.5 and regions_rebuilt > 0:
+			# We're using more than half the frame budget, stop for now
 			break
 
 		if region_pos in active_regions:
@@ -1162,5 +1176,21 @@ func _process_dirty_regions() -> void:
 	for region_pos in regions_to_clear:
 		dirty_regions.erase(region_pos)
 
-	# if regions_rebuilt > 0:
-	# 	print("[ChunkManager] Rebuilt %d regions" % regions_rebuilt)
+	# Adaptive rate limiting based on actual performance
+	if regions_rebuilt > 0:
+		var rebuild_time_ms := (Time.get_ticks_usec() - rebuild_start_time) / 1000.0
+		var avg_time_per_region := rebuild_time_ms / regions_rebuilt
+
+		# If we're too slow, reduce the rate
+		if rebuild_time_ms > TARGET_FRAME_TIME_MS * 0.7:
+			max_region_rebuilds_per_frame = maxi(MIN_REGION_REBUILDS_PER_FRAME, max_region_rebuilds_per_frame - 1)
+			print("[ChunkManager] Reducing region rebuild rate to %d (frame time: %.1fms)" % [max_region_rebuilds_per_frame, rebuild_time_ms])
+		# If we're fast enough, we can increase the rate
+		elif rebuild_time_ms < TARGET_FRAME_TIME_MS * 0.3 and max_region_rebuilds_per_frame < MAX_REGION_REBUILDS_PER_FRAME:
+			max_region_rebuilds_per_frame += 1
+
+		# Log region rebuild performance if we have a backlog
+		if dirty_regions.size() > 5:
+			print("[ChunkManager] Rebuilt %d regions in %.1fms (avg: %.1fms/region), %d regions pending" % [
+				regions_rebuilt, rebuild_time_ms, avg_time_per_region, dirty_regions.size()
+			])
