@@ -273,19 +273,19 @@ func update_frustum_culling(camera: Camera3D) -> void:
 func _aabb_intersects_frustum(aabb: AABB, frustum: Array[Plane]) -> bool:
 	# Test AABB against each frustum plane
 	for plane in frustum:
-		# Get the "positive" and "negative" vertices relative to the plane normal
 		var p := aabb.position
 		var s := aabb.size
 
-		# Calculate the p-vertex (furthest point in the direction of the normal)
-		var p_vertex := Vector3(
-			p.x + (s.x if plane.normal.x > 0 else 0),
-			p.y + (s.y if plane.normal.y > 0 else 0),
-			p.z + (s.z if plane.normal.z > 0 else 0)
+		# Calculate the n-vertex (nearest point to the plane)
+		# This is the corner of the AABB closest to the plane
+		var n_vertex := Vector3(
+			p.x + (0 if plane.normal.x > 0 else s.x),
+			p.y + (0 if plane.normal.y > 0 else s.y),
+			p.z + (0 if plane.normal.z > 0 else s.z)
 		)
 
-		# If the p-vertex is behind the plane, the AABB is completely outside
-		if plane.is_point_over(p_vertex):
+		# If the nearest vertex is outside the plane, the entire AABB is outside
+		if plane.is_point_over(n_vertex):
 			return false
 
 	# AABB intersects or is inside the frustum
