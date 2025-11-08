@@ -263,7 +263,8 @@ func _greedy_mesh_direction(st: SurfaceTool, chunk: Chunk, direction: Vector3i) 
 			for j in range(VoxelData.CHUNK_SIZE):
 				mask[i][j] = null
 
-		# Fill the mask
+		# Fill the mask and track if slice has any faces
+		var has_faces := false
 		for u in range(VoxelData.CHUNK_SIZE):
 			for v in range(VoxelData.CHUNK_SIZE):
 				# Build position in 3D space
@@ -277,6 +278,11 @@ func _greedy_mesh_direction(st: SurfaceTool, chunk: Chunk, direction: Vector3i) 
 				if voxel_type != VoxelTypes.Type.AIR and not VoxelTypes.is_transparent(voxel_type):
 					if _should_add_face(chunk, pos, direction):
 						mask[u][v] = voxel_type
+						has_faces = true
+
+		# Skip empty slices (major performance optimization!)
+		if not has_faces:
+			continue
 
 		# Greedily merge quads in this slice
 		var result := _merge_quads_in_mask(st, chunk, mask, direction, u_axis, v_axis, d_axis, d)

@@ -30,6 +30,9 @@ var generating_chunks: Dictionary = {}
 ## Chunks currently being meshed (Vector3i -> Chunk)
 var meshing_chunks: Dictionary = {}
 
+## Chunks pending neighbor mesh rebuild (Vector3i -> true) - batched to avoid duplicates
+var pending_neighbor_rebuilds: Dictionary = {}
+
 ## Last player position used for chunk updates
 var last_update_position: Vector3 = Vector3.ZERO
 
@@ -143,11 +146,12 @@ func update_chunks(player_position: Vector3, camera_forward: Vector3 = Vector3.F
 
 ## Process completed threaded jobs each frame
 func _process(delta: float) -> void:
-	if not thread_pool:
-		return
+	if thread_pool:
+		# Process completed jobs
+		thread_pool.process_completed_jobs(_on_job_completed, max_jobs_per_frame)
 
-	# Process completed jobs
-	thread_pool.process_completed_jobs(_on_job_completed, max_jobs_per_frame)
+	# Process batched neighbor rebuilds (prevents duplicate rebuilds in same frame)
+	_process_pending_neighbor_rebuilds()
 
 ## Handle completed job from thread pool
 func _on_job_completed(job) -> void:
@@ -223,6 +227,9 @@ func _on_meshing_completed(job) -> void:
 	if mesh_data.is_empty():
 		return
 
+	# Get old mesh instance if this is a rebuild
+	var old_mesh: MeshInstance3D = chunk.get_meta("old_mesh_instance", null)
+
 	# Create mesh instance on main thread
 	var mesh_instance: MeshInstance3D = mesh_builder.create_mesh_instance_from_data(mesh_data)
 	if mesh_instance:
@@ -230,6 +237,12 @@ func _on_meshing_completed(job) -> void:
 		mesh_instance.position = chunk.get_world_position()
 		add_child(mesh_instance)
 		stats_chunks_meshed += 1
+
+	# Now remove old mesh after new one is visible (prevents flashing)
+	if old_mesh:
+		remove_child(old_mesh)
+		old_mesh.queue_free()
+		chunk.remove_meta("old_mesh_instance")
 
 	# Activate chunk
 	chunk.state = Chunk.State.ACTIVE
@@ -673,6 +686,7 @@ func _clear_chunk_neighbors(chunk_pos: Vector3i) -> void:
 
 ## Rebuild meshes of neighboring chunks
 ## Called when a new chunk is loaded to ensure proper face culling at boundaries
+## Now uses batched rebuilds to prevent duplicate work in the same frame
 func _rebuild_neighbor_meshes(chunk_pos: Vector3i) -> void:
 	var neighbor_offsets := {
 		"north": Vector3i(0, 0, 1),
@@ -683,25 +697,54 @@ func _rebuild_neighbor_meshes(chunk_pos: Vector3i) -> void:
 		"down": Vector3i(0, -1, 0)
 	}
 
+	# Instead of rebuilding immediately, queue neighbors for batched rebuild
+	# This prevents the same neighbor from being rebuilt multiple times in one frame
 	for direction in neighbor_offsets.keys():
 		var neighbor_pos: Vector3i = chunk_pos + neighbor_offsets[direction]
 		if neighbor_pos in active_chunks:
 			var neighbor: Chunk = active_chunks[neighbor_pos]
 			if neighbor and neighbor.state == Chunk.State.ACTIVE:
-				# Reduce console spam
-				# print("[ChunkManager]     Rebuilding mesh for neighbor at %s..." % neighbor_pos)
+				# Add to pending rebuilds (dictionary acts as a set, avoids duplicates)
+				pending_neighbor_rebuilds[neighbor_pos] = true
+
+## Process batched neighbor rebuilds
+## Processes up to a limited number per frame to avoid FPS spikes
+func _process_pending_neighbor_rebuilds() -> void:
+	if pending_neighbor_rebuilds.is_empty():
+		return
+
+	# Limit rebuilds per frame to prevent FPS drops
+	const MAX_REBUILDS_PER_FRAME: int = 6
+	var rebuilds_this_frame: int = 0
+
+	# Process pending rebuilds
+	var positions_to_remove: Array[Vector3i] = []
+	for neighbor_pos in pending_neighbor_rebuilds.keys():
+		if rebuilds_this_frame >= MAX_REBUILDS_PER_FRAME:
+			break
+
+		# Check if chunk still exists and is active
+		if neighbor_pos in active_chunks:
+			var neighbor: Chunk = active_chunks[neighbor_pos]
+			if neighbor and neighbor.state == Chunk.State.ACTIVE:
 				_rebuild_chunk_mesh(neighbor)
+				rebuilds_this_frame += 1
+
+		positions_to_remove.append(neighbor_pos)
+
+	# Remove processed rebuilds
+	for pos in positions_to_remove:
+		pending_neighbor_rebuilds.erase(pos)
 
 ## Rebuild a single chunk's mesh
 func _rebuild_chunk_mesh(chunk: Chunk) -> void:
 	if not chunk or not mesh_builder:
 		return
 
-	# Remove old mesh instance if it exists
-	if chunk.mesh_instance:
-		remove_child(chunk.mesh_instance)
-		chunk.mesh_instance.queue_free()
-		chunk.mesh_instance = null
+	# IMPORTANT: Don't remove old mesh yet! Keep it visible to prevent flashing
+	# The old mesh will be replaced when the new one is ready
+	# Store reference to old mesh so we can clean it up later
+	chunk.set_meta("old_mesh_instance", chunk.mesh_instance)
 
 	# Build new mesh (use threading if available)
 	chunk.state = Chunk.State.MESHING
@@ -715,11 +758,17 @@ func _rebuild_chunk_mesh(chunk: Chunk) -> void:
 		thread_pool.queue_meshing_job(chunk, mesh_builder, priority)
 	else:
 		# Fallback to synchronous rebuild
+		var old_mesh = chunk.mesh_instance
 		var mesh_instance: MeshInstance3D = mesh_builder.build_mesh(chunk)
 		if mesh_instance:
 			chunk.mesh_instance = mesh_instance
 			mesh_instance.position = chunk.get_world_position()
 			add_child(mesh_instance)
+
+		# Now remove old mesh after new one is added
+		if old_mesh:
+			remove_child(old_mesh)
+			old_mesh.queue_free()
 
 		# Restore active state
 		chunk.state = Chunk.State.ACTIVE
