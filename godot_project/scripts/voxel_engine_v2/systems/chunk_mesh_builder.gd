@@ -115,11 +115,13 @@ func _add_voxel_faces(st: SurfaceTool, chunk: Chunk, local_pos: Vector3i, voxel_
 		vertices_added += 6
 
 	if _should_add_face(chunk, local_pos, Vector3i.FORWARD):
-		_add_north_face(st, world_pos, voxel_type)
+		# FORWARD is -Z direction, so render the -Z face (south)
+		_add_south_face(st, world_pos, voxel_type)
 		vertices_added += 6
 
 	if _should_add_face(chunk, local_pos, Vector3i.BACK):
-		_add_south_face(st, world_pos, voxel_type)
+		# BACK is +Z direction, so render the +Z face (north)
+		_add_north_face(st, world_pos, voxel_type)
 		vertices_added += 6
 
 	if _should_add_face(chunk, local_pos, Vector3i.RIGHT):
