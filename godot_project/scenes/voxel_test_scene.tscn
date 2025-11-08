@@ -1,7 +1,7 @@
 [gd_scene load_steps=4 format=3 uid="uid://cs7j84kqgxfgb"]
 
-[ext_resource type="Script" path="res://scripts/voxel_engine_v2/voxel_world.gd" id="1_voxel_world"]
-[ext_resource type="Script" path="res://scripts/voxel_engine_v2/test_camera_controller.gd" id="2_camera"]
+[ext_resource type="Script" uid="uid://b60uv5vrm74lg" path="res://scripts/voxel_engine_v2/voxel_world.gd" id="1_voxel_world"]
+[ext_resource type="Script" uid="uid://7xdsgkab6fxo" path="res://scripts/voxel_engine_v2/test_camera_controller.gd" id="2_camera"]
 
 [sub_resource type="Environment" id="Environment_1"]
 background_mode = 1
@@ -16,25 +16,14 @@ glow_enabled = true
 [node name="VoxelWorld" type="Node3D" parent="."]
 script = ExtResource("1_voxel_world")
 world_seed = 12345
-enable_auto_generation = true
-render_distance = 8
-vertical_render_distance = 4
-enable_chunk_pooling = true
-chunk_pool_size = 128
-show_debug_info = true
-print_stats_interval = 5.0
 player_node_path = NodePath("../TestCamera")
 
 [node name="TestCamera" type="Camera3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 80, 0)
 current = true
-fov = 75.0
 near = 0.1
 far = 1000.0
 script = ExtResource("2_camera")
-move_speed = 20.0
-sprint_multiplier = 3.0
-mouse_sensitivity = 0.003
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="."]
 environment = SubResource("Environment_1")

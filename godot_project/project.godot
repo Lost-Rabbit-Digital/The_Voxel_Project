@@ -15,7 +15,7 @@ config/description="Dungeon crawler with RPG elements in a voxel-based world."
 config/version="1.0.0"
 config/tags=PackedStringArray("open_sourced", "prototype")
 run/main_scene="uid://cs7j84kqgxfgb"
-config/features=PackedStringArray("4.4", "GL Compatibility")
+config/features=PackedStringArray("4.5", "GL Compatibility")
 config/icon="uid://ce7ub8p17vdqb"
 
 [autoload]
