@@ -332,6 +332,192 @@ func raycast(from: Vector3, direction: Vector3, max_distance: float) -> RaycastR
 
 ---
 
+## 🎯 Modern Minecraft-Inspired Improvements (2025-11-08)
+
+Based on analysis comparing our implementation to modern Minecraft (1.18+) and the Sodium mod, these three improvements offer the highest performance gains:
+
+### **1. Region-Based Mesh Batching (Priority 1 - Highest Impact)**
+
+**Problem:** Currently rendering 1 chunk = 1 draw call. With 100 visible chunks = 100 draw calls.
+
+**Solution:** Combine multiple chunks into region batches (Sodium's approach).
+
+**Implementation:**
+- Group chunks into 8x8x8 regions (512 chunks per region)
+- Combine meshes within same region into single ArrayMesh
+- Dramatically reduce draw calls: 100 chunks = ~2-5 draw calls
+
+**Expected Performance Gain:**
+- 60-90% reduction in draw calls
+- 20-40% FPS boost
+- Better GPU batching efficiency
+
+**Code Architecture:**
+```gdscript
+class_name ChunkRegion extends Node3D
+
+const REGION_SIZE := 8  # 8x8x8 chunks per region
+
+var region_position: Vector3i
+var chunks_in_region: Array[Chunk] = []
+var combined_mesh: ArrayMesh = null
+var mesh_instance: MeshInstance3D = null
+var is_dirty: bool = false
+
+func rebuild_combined_mesh() -> void:
+    # Combine all chunk meshes in this region
+    # Uses ArrayMesh.add_surface_from_arrays()
+    # All chunks share same material (texture atlas)
+    pass
+```
+
+**Technical Details:**
+- Rebuild region mesh when any child chunk changes
+- Use same material for all chunks (texture atlas required)
+- Region frustum culling (cull entire region at once)
+- Smart invalidation (only rebuild dirty regions)
+
+---
+
+### **2. Occlusion Culling (Priority 2 - Medium-High Impact)**
+
+**Problem:** Rendering chunks underground or behind terrain that can't be seen.
+
+**Solution:** Implement graph-based occlusion culling similar to Sodium.
+
+**Approaches:**
+
+**Approach A: Simple Raycast Occlusion (Easier)**
+- Raycast from camera to chunk center
+- If ray hits another chunk first, skip rendering
+- Fast but not perfect accuracy
+
+**Approach B: Graph-Based Occlusion (Sodium's Method)**
+- Build chunk visibility graph
+- Flood-fill from camera position
+- Mark reachable chunks as visible
+- Only render visible chunks
+
+**Expected Performance Gain:**
+- 15-30% fewer chunks rendered (especially underground)
+- Biggest gains in caves and dense terrain
+- Minimal CPU overhead with smart caching
+
+**Code Architecture:**
+```gdscript
+class_name OcclusionCuller
+
+var visibility_graph: Dictionary = {}  # Vector3i -> Array[Vector3i]
+var visible_chunks: Array[Vector3i] = []
+
+func update_visibility(camera_chunk: Vector3i, all_chunks: Array[Vector3i]) -> void:
+    visible_chunks.clear()
+
+    # Flood-fill from camera position
+    var open_set: Array[Vector3i] = [camera_chunk]
+    var closed_set: Dictionary = {}
+
+    while not open_set.is_empty():
+        var current = open_set.pop_front()
+        if current in closed_set:
+            continue
+
+        closed_set[current] = true
+        visible_chunks.append(current)
+
+        # Check neighbors for visibility openings
+        for neighbor in get_neighbors(current):
+            if can_see_through(current, neighbor):
+                open_set.append(neighbor)
+
+func can_see_through(from: Vector3i, to: Vector3i) -> bool:
+    # Check if there's a visible path between chunks
+    # Air chunks or chunks with exposed faces = true
+    pass
+```
+
+**Implementation Steps:**
+1. Build chunk connectivity graph (which chunks can "see" each other)
+2. Implement flood-fill visibility algorithm
+3. Cache visibility data (invalidate on chunk changes)
+4. Integrate with rendering pipeline
+
+---
+
+### **3. Increased Chunk Height (Priority 3 - Architectural Improvement)**
+
+**Problem:** 16x16x16 chunks are too small vertically. Minecraft uses full-height chunks (256-384 blocks).
+
+**Current:** Many vertical chunks for tall worlds (16 blocks height each)
+**Proposed:** Fewer, taller chunks (64-128 blocks height each)
+
+**Benefits:**
+- Fewer total chunks to manage
+- Better vertical coherence (caves, mountains in same chunk)
+- More similar to Minecraft's architecture
+- Better cache locality for vertical structures
+
+**Tradeoffs:**
+- Larger memory per chunk (16x16x64 = 16,384 bytes vs 4,096)
+- Slower meshing per chunk (but fewer total chunks)
+- Can subdivide meshing into 16-block vertical sections
+
+**Implementation:**
+```gdscript
+# Old approach:
+const CHUNK_SIZE = 16  # All dimensions
+
+# New approach:
+const CHUNK_SIZE_XZ = 16  # Horizontal (X, Z)
+const CHUNK_SIZE_Y = 64   # Vertical (Y) - or 128 for very tall worlds
+
+# Chunk volume changes:
+# Old: 16 * 16 * 16 = 4,096 voxels per chunk
+# New: 16 * 16 * 64 = 16,384 voxels per chunk (4x larger)
+
+# Total chunks for same world area:
+# Old: More chunks vertically
+# New: 1/4th as many chunks for same height
+```
+
+**Migration Strategy:**
+- Add new constants CHUNK_SIZE_XZ and CHUNK_SIZE_Y
+- Update all chunk indexing code
+- Keep CHUNK_SIZE for backward compatibility (or deprecate)
+- Test thoroughly before committing
+
+**Performance Impact:**
+- 25-40% fewer total chunks for typical world
+- Reduced chunk management overhead
+- Slightly longer per-chunk meshing (but parallelizable)
+
+---
+
+### **Implementation Priority Order**
+
+**Week 1: Occlusion Culling**
+- Implement simple raycast-based occlusion
+- Measure performance gains
+- Iterate to graph-based if needed
+
+**Week 2: Chunk Height Increase**
+- Refactor chunk dimensions
+- Test and validate
+- Update save/load system
+
+**Week 3: Region-Based Batching**
+- Implement ChunkRegion system
+- Combine mesh generation
+- Test draw call reduction
+
+**Expected Overall Impact:**
+- **FPS Gain:** +40-60% in typical scenes
+- **Draw Calls:** 90% reduction (100 → 5-15)
+- **Chunks Rendered:** 30-40% reduction (occlusion culling)
+- **Memory Efficiency:** Better with taller chunks
+
+---
+
 ## 📊 Comparison: Old vs New
 
 | Feature | Old Implementation | New Implementation |

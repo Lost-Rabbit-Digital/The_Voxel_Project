@@ -244,6 +244,17 @@ func _update_debug_info(delta: float) -> void:
 		debug_text += "Cache Size: %.1f MB\n" % stats.get("cache_size_mb", 0.0)
 		debug_text += "\n"
 
+	# Add occlusion culling stats if enabled
+	if stats.has("occlusion_mode"):
+		debug_text += "Occlusion: %s\n" % stats.get("occlusion_mode", "DISABLED")
+		if stats.get("occlusion_mode", "DISABLED") != "DISABLED":
+			debug_text += "Visible: %d | Hidden: %d\n" % [
+				stats.get("occlusion_visible", 0),
+				stats.get("occlusion_hidden", 0)
+			]
+			debug_text += "Culled: %.1f%%\n" % stats.get("occlusion_rate", 0.0)
+		debug_text += "\n"
+
 	debug_text += "Seed: %d\n" % world_seed
 
 	debug_label.text = debug_text

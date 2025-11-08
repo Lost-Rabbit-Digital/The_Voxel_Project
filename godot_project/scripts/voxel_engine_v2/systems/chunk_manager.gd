@@ -47,6 +47,7 @@ var terrain_generator = null
 var mesh_builder = null
 var chunk_cache: ChunkCache = null
 var thread_pool: ChunkThreadPool = null
+var occlusion_culler: OcclusionCuller = null
 
 ## Statistics
 var stats_active_chunks: int = 0
@@ -94,6 +95,12 @@ func _ready() -> void:
 		print("[ChunkManager] Chunk pool ready: %d chunks" % stats_pooled_chunks)
 	else:
 		print("[ChunkManager] Chunk pooling disabled")
+
+	# Initialize occlusion culler
+	print("[ChunkManager] Initializing occlusion culler...")
+	occlusion_culler = OcclusionCuller.new(self)
+	occlusion_culler.mode = OcclusionCuller.Mode.FLOOD_FILL
+	print("[ChunkManager] Occlusion culler initialized")
 
 	print("[ChunkManager] Ready!")
 
@@ -260,6 +267,10 @@ func _on_meshing_completed(job) -> void:
 	# Activate chunk
 	chunk.state = Chunk.State.ACTIVE
 
+	# Mark occlusion graph as dirty (new chunk added)
+	if occlusion_culler:
+		occlusion_culler.mark_graph_dirty()
+
 	# Only rebuild neighbors if this was a new chunk load, not a neighbor rebuild
 	var is_rebuild: bool = chunk.get_meta("is_rebuild", false)
 	if not is_rebuild:
@@ -273,13 +284,19 @@ var tracked_position: Vector3 = Vector3.ZERO
 
 ## Update frustum culling for all active chunks
 ## Shows/hides chunks based on camera frustum visibility
+## Also applies occlusion culling if enabled
 func update_frustum_culling(camera: Camera3D) -> void:
 	if not camera:
 		return
 
 	var frustum := camera.get_frustum()
-	var visible_count := 0
-	var hidden_count := 0
+	var frustum_visible_count := 0
+	var frustum_hidden_count := 0
+	var occlusion_hidden_count := 0
+
+	# Update occlusion culling first
+	if occlusion_culler and occlusion_culler.mode != OcclusionCuller.Mode.DISABLED:
+		occlusion_culler.update_visibility(camera.global_position, active_chunks)
 
 	for chunk in active_chunks.values():
 		if not chunk or not chunk.mesh_instance:
@@ -288,20 +305,31 @@ func update_frustum_culling(camera: Camera3D) -> void:
 		# Get chunk AABB
 		var aabb: AABB = chunk.get_aabb()
 
-		# Check if AABB intersects frustum
-		var is_visible := _aabb_intersects_frustum(aabb, frustum)
+		# Check frustum visibility
+		var is_frustum_visible := _aabb_intersects_frustum(aabb, frustum)
+
+		# Check occlusion visibility (if enabled)
+		var is_occluded := false
+		if occlusion_culler and occlusion_culler.mode != OcclusionCuller.Mode.DISABLED:
+			is_occluded = not occlusion_culler.is_chunk_visible(chunk.position)
+
+		# Final visibility = frustum visible AND not occluded
+		var is_visible := is_frustum_visible and not is_occluded
 
 		# Update visibility
 		if chunk.mesh_instance.visible != is_visible:
 			chunk.mesh_instance.visible = is_visible
 
-		if is_visible:
-			visible_count += 1
+		# Track stats
+		if is_frustum_visible:
+			frustum_visible_count += 1
+			if is_occluded:
+				occlusion_hidden_count += 1
 		else:
-			hidden_count += 1
+			frustum_hidden_count += 1
 
 	# Optionally log culling stats (can be disabled for performance)
-	# print("[ChunkManager] Frustum culling: %d visible, %d hidden" % [visible_count, hidden_count])
+	# print("[ChunkManager] Culling: %d frustum visible, %d frustum hidden, %d occluded" % [frustum_visible_count, frustum_hidden_count, occlusion_hidden_count])
 
 ## Check if an AABB intersects with a camera frustum
 func _aabb_intersects_frustum(aabb: AABB, frustum: Array[Plane]) -> bool:
@@ -557,6 +585,10 @@ func _load_chunk_sync(chunk_pos: Vector3i) -> Chunk:
 	# Activate chunk
 	chunk.state = Chunk.State.ACTIVE
 
+	# Mark occlusion graph as dirty (new chunk added)
+	if occlusion_culler:
+		occlusion_culler.mark_graph_dirty()
+
 	# Rebuild neighbor meshes to remove faces that are now hidden by this chunk
 	_rebuild_neighbor_meshes(chunk_pos)
 
@@ -609,6 +641,10 @@ func unload_chunk(chunk_pos: Vector3i) -> void:
 
 	# Remove from active chunks
 	active_chunks.erase(chunk_pos)
+
+	# Mark occlusion graph as dirty (chunk removed)
+	if occlusion_culler:
+		occlusion_culler.mark_graph_dirty()
 
 	# Rebuild neighbor meshes so they can render boundary faces again
 	_rebuild_neighbor_meshes(chunk_pos)
@@ -889,6 +925,14 @@ func get_stats() -> Dictionary:
 		stats["completed_jobs"] = thread_stats.completed_jobs
 	else:
 		stats["threading_enabled"] = false
+
+	# Add occlusion culling stats if available
+	if occlusion_culler:
+		var occlusion_stats := occlusion_culler.get_stats()
+		stats["occlusion_mode"] = occlusion_stats.mode
+		stats["occlusion_visible"] = occlusion_stats.visible_chunks
+		stats["occlusion_hidden"] = occlusion_stats.occluded_chunks
+		stats["occlusion_rate"] = occlusion_stats.occlusion_rate
 
 	return stats
 
