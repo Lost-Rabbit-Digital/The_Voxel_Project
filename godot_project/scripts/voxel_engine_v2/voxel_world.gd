@@ -255,6 +255,15 @@ func _update_debug_info(delta: float) -> void:
 			debug_text += "Culled: %.1f%%\n" % stats.get("occlusion_rate", 0.0)
 		debug_text += "\n"
 
+	# Add region batching stats if enabled
+	if stats.get("region_batching_enabled", false):
+		debug_text += "Region Batching: ON\n"
+		debug_text += "Regions: %d (dirty: %d)\n" % [
+			stats.get("active_regions", 0),
+			stats.get("dirty_regions", 0)
+		]
+		debug_text += "\n"
+
 	debug_text += "Seed: %d\n" % world_seed
 
 	debug_label.text = debug_text

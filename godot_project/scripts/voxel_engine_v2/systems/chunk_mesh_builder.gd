@@ -138,11 +138,60 @@ func build_mesh_data(chunk: Chunk) -> Dictionary:
 	# Commit to mesh and return data
 	var mesh := st.commit()
 
+	# Also extract arrays for region batching
+	var arrays := mesh.surface_get_arrays(0) if mesh.get_surface_count() > 0 else []
+
 	return {
 		"mesh": mesh,
+		"arrays": arrays,
 		"vertices": vertices_added,
 		"quads": quads_added
 	}
+
+## Build mesh arrays for region batching (returns raw arrays, not committed mesh)
+## This is used by ChunkRegion to combine multiple chunks into one mesh
+func build_mesh_arrays(chunk: Chunk) -> Array:
+	if not chunk or not chunk.voxel_data:
+		return []
+
+	# Skip empty chunks
+	if chunk.is_empty():
+		return []
+
+	# Create surface tool for mesh building
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+
+	# Process each axis direction for greedy meshing
+	var directions := [
+		{"axis": Vector3i.UP, "name": "up"},
+		{"axis": Vector3i.DOWN, "name": "down"},
+		{"axis": Vector3i.FORWARD, "name": "forward"},
+		{"axis": Vector3i.BACK, "name": "back"},
+		{"axis": Vector3i.RIGHT, "name": "right"},
+		{"axis": Vector3i.LEFT, "name": "left"}
+	]
+
+	var vertices_added := 0
+	for dir_info in directions:
+		var result := _greedy_mesh_direction(st, chunk, dir_info.axis)
+		vertices_added += result.vertices
+
+	# Check if we have any geometry
+	if vertices_added == 0:
+		return []
+
+	# Index the mesh for optimization
+	st.index()
+
+	# Commit to temporary mesh to get arrays
+	var temp_mesh := st.commit()
+
+	# Extract arrays
+	if temp_mesh.get_surface_count() > 0:
+		return temp_mesh.surface_get_arrays(0)
+
+	return []
 
 ## Create MeshInstance3D from mesh data (call on main thread)
 func create_mesh_instance_from_data(mesh_data: Dictionary) -> MeshInstance3D:

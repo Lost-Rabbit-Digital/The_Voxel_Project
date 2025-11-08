@@ -14,6 +14,7 @@ extends Node3D
 @export var enable_threading: bool = true
 @export var worker_thread_count: int = 4
 @export var max_jobs_per_frame: int = 8
+@export var enable_region_batching: bool = true  # Enable region-based mesh batching
 
 ## Active chunks in the world (Vector3i chunk_pos -> Chunk)
 var active_chunks: Dictionary = {}
@@ -29,6 +30,15 @@ var generating_chunks: Dictionary = {}
 
 ## Chunks currently being meshed (Vector3i -> Chunk)
 var meshing_chunks: Dictionary = {}
+
+## Region-based rendering (Vector3i region_pos -> ChunkRegion)
+var active_regions: Dictionary = {}
+
+## Regions that need mesh rebuilding
+var dirty_regions: Dictionary = {}  # Vector3i -> true
+
+## Maximum regions to rebuild per frame (prevents stuttering)
+const MAX_REGION_REBUILDS_PER_FRAME: int = 2
 
 ## Chunks pending neighbor mesh rebuild (Vector3i -> true) - batched to avoid duplicates
 var pending_neighbor_rebuilds: Dictionary = {}
@@ -160,6 +170,10 @@ func _process(delta: float) -> void:
 	# Process batched neighbor rebuilds (prevents duplicate rebuilds in same frame)
 	_process_pending_neighbor_rebuilds()
 
+	# Rebuild dirty regions if region batching is enabled
+	if enable_region_batching:
+		_process_dirty_regions()
+
 ## Handle completed job from thread pool
 func _on_job_completed(job) -> void:
 	if job.job_type == ChunkThreadPool.JobType.GENERATE_TERRAIN:
@@ -239,9 +253,9 @@ func _on_meshing_completed(job) -> void:
 	if mesh_data.is_empty():
 		return
 
-	# Get old mesh instance if this is a rebuild
+	# Get old mesh instance if this is a rebuild (only if region batching disabled)
 	var old_mesh: MeshInstance3D = null
-	if chunk.has_meta("old_mesh_instance"):
+	if not enable_region_batching and chunk.has_meta("old_mesh_instance"):
 		var meta_mesh = chunk.get_meta("old_mesh_instance")
 		# CRITICAL: Validate the mesh instance - it might have been freed!
 		if meta_mesh and is_instance_valid(meta_mesh):
@@ -250,22 +264,33 @@ func _on_meshing_completed(job) -> void:
 			# Stale reference - clean it up
 			chunk.remove_meta("old_mesh_instance")
 
-	# Create mesh instance on main thread
-	var mesh_instance: MeshInstance3D = mesh_builder.create_mesh_instance_from_data(mesh_data)
-	if mesh_instance:
-		chunk.mesh_instance = mesh_instance
-		mesh_instance.position = chunk.get_world_position()
-		add_child(mesh_instance)
-		stats_chunks_meshed += 1
+	# Handle mesh creation based on batching mode
+	if enable_region_batching:
+		# Region batching mode: Don't create individual mesh instances
+		# The region will combine multiple chunks into one mesh
+		# Just activate the chunk and add to region
+		pass
+	else:
+		# Traditional mode: Create individual mesh instance per chunk
+		var mesh_instance: MeshInstance3D = mesh_builder.create_mesh_instance_from_data(mesh_data)
+		if mesh_instance:
+			chunk.mesh_instance = mesh_instance
+			mesh_instance.position = chunk.get_world_position()
+			add_child(mesh_instance)
+			stats_chunks_meshed += 1
 
-	# Now remove old mesh after new one is visible (prevents flashing)
-	if old_mesh and is_instance_valid(old_mesh):
-		remove_child(old_mesh)
-		old_mesh.queue_free()
-		chunk.remove_meta("old_mesh_instance")
+		# Now remove old mesh after new one is visible (prevents flashing)
+		if old_mesh and is_instance_valid(old_mesh):
+			remove_child(old_mesh)
+			old_mesh.queue_free()
+			chunk.remove_meta("old_mesh_instance")
 
 	# Activate chunk
 	chunk.state = Chunk.State.ACTIVE
+
+	# Add chunk to region (if region batching enabled)
+	if enable_region_batching:
+		_add_chunk_to_region(chunk)
 
 	# Mark occlusion graph as dirty (new chunk added)
 	if occlusion_culler:
@@ -290,13 +315,50 @@ func update_frustum_culling(camera: Camera3D) -> void:
 		return
 
 	var frustum := camera.get_frustum()
-	var frustum_visible_count := 0
-	var frustum_hidden_count := 0
-	var occlusion_hidden_count := 0
 
 	# Update occlusion culling first
 	if occlusion_culler and occlusion_culler.mode != OcclusionCuller.Mode.DISABLED:
 		occlusion_culler.update_visibility(camera.global_position, active_chunks)
+
+	# Region batching mode: Cull at region level
+	if enable_region_batching:
+		_update_region_culling(frustum)
+	else:
+		# Traditional mode: Cull individual chunks
+		_update_chunk_culling(frustum)
+
+## Update culling for regions (batched mode)
+func _update_region_culling(frustum: Array[Plane]) -> void:
+	var visible_count := 0
+	var hidden_count := 0
+
+	for region in active_regions.values():
+		if not region or not region.mesh_instance:
+			continue
+
+		# Get region AABB
+		var aabb: AABB = region.get_aabb()
+
+		# Check frustum visibility
+		var is_frustum_visible := _aabb_intersects_frustum(aabb, frustum)
+
+		# For regions, occlusion culling is less useful (regions are large)
+		# We'll keep it simple and only use frustum culling at region level
+
+		# Update visibility
+		if region.mesh_instance.visible != is_frustum_visible:
+			region.mesh_instance.visible = is_frustum_visible
+
+		if is_frustum_visible:
+			visible_count += 1
+		else:
+			hidden_count += 1
+
+## Update culling for individual chunks (traditional mode)
+func _update_chunk_culling(frustum: Array[Plane]) -> void:
+	var frustum_visible_count := 0
+	var frustum_hidden_count := 0
+	var occlusion_hidden_count := 0
 
 	for chunk in active_chunks.values():
 		if not chunk or not chunk.mesh_instance:
@@ -568,22 +630,28 @@ func _load_chunk_sync(chunk_pos: Vector3i) -> Chunk:
 	# Generate mesh
 	chunk.state = Chunk.State.MESHING
 	if mesh_builder:
-		# print("[ChunkManager]   Building mesh...")
-		var mesh_instance: MeshInstance3D = mesh_builder.build_mesh(chunk)
-		if mesh_instance:
-			chunk.mesh_instance = mesh_instance
-			mesh_instance.position = chunk.get_world_position()
-			add_child(mesh_instance)
-			stats_chunks_meshed += 1
-			# var vertex_count := mesh_instance.mesh.get_surface_count() if mesh_instance.mesh else 0
-			# print("[ChunkManager]   Mesh built with %d surfaces" % vertex_count)
-		else:
-			print("[ChunkManager]   WARNING: Mesh builder returned null")
+		# Only create individual mesh instances if region batching is disabled
+		if not enable_region_batching:
+			# print("[ChunkManager]   Building mesh...")
+			var mesh_instance: MeshInstance3D = mesh_builder.build_mesh(chunk)
+			if mesh_instance:
+				chunk.mesh_instance = mesh_instance
+				mesh_instance.position = chunk.get_world_position()
+				add_child(mesh_instance)
+				stats_chunks_meshed += 1
+				# var vertex_count := mesh_instance.mesh.get_surface_count() if mesh_instance.mesh else 0
+				# print("[ChunkManager]   Mesh built with %d surfaces" % vertex_count)
+			else:
+				print("[ChunkManager]   WARNING: Mesh builder returned null")
 	else:
 		print("[ChunkManager]   WARNING: No mesh builder available")
 
 	# Activate chunk
 	chunk.state = Chunk.State.ACTIVE
+
+	# Add chunk to region (if region batching enabled)
+	if enable_region_batching:
+		_add_chunk_to_region(chunk)
 
 	# Mark occlusion graph as dirty (new chunk added)
 	if occlusion_culler:
@@ -630,8 +698,12 @@ func unload_chunk(chunk_pos: Vector3i) -> void:
 		# else:
 		# 	print("[ChunkManager]   WARNING: Cache is full, not saving chunk")
 
-	# Remove mesh from scene
-	if chunk.mesh_instance:
+	# Remove chunk from region (if region batching enabled)
+	if enable_region_batching:
+		_remove_chunk_from_region(chunk_pos)
+
+	# Remove mesh from scene (only if region batching disabled)
+	if not enable_region_batching and chunk.mesh_instance:
 		remove_child(chunk.mesh_instance)
 		chunk.mesh_instance.queue_free()
 		chunk.mesh_instance = null
@@ -892,6 +964,15 @@ func cleanup_all() -> void:
 	active_chunks.clear()
 	chunk_pool.clear()
 
+	# Cleanup all regions
+	for region in active_regions.values():
+		if region:
+			remove_child(region)
+			region.cleanup()
+
+	active_regions.clear()
+	dirty_regions.clear()
+
 	# Print cache stats on cleanup
 	if chunk_cache:
 		chunk_cache.print_stats()
@@ -934,6 +1015,14 @@ func get_stats() -> Dictionary:
 		stats["occlusion_hidden"] = occlusion_stats.occluded_chunks
 		stats["occlusion_rate"] = occlusion_stats.occlusion_rate
 
+	# Add region batching stats if available
+	if enable_region_batching:
+		stats["region_batching_enabled"] = true
+		stats["active_regions"] = active_regions.size()
+		stats["dirty_regions"] = dirty_regions.size()
+	else:
+		stats["region_batching_enabled"] = false
+
 	return stats
 
 ## Print debug info
@@ -962,3 +1051,91 @@ func print_stats() -> void:
 		print("  Cache misses: %d" % cache_stats.cache_misses)
 		print("  Cache hit rate: %.1f%%" % cache_stats.hit_rate)
 		print("  Cache size: %.2f MB" % cache_stats.cache_size_mb)
+
+	# Print region stats if batching enabled
+	if enable_region_batching:
+		print("  Region batching: Enabled")
+		print("  Active regions: %d" % active_regions.size())
+		print("  Dirty regions: %d" % dirty_regions.size())
+
+## Get or create a region for the given chunk position
+func _get_or_create_region(chunk_pos: Vector3i) -> ChunkRegion:
+	var region_pos := ChunkRegion.chunk_to_region_position(chunk_pos)
+
+	# Return existing region if available
+	if region_pos in active_regions:
+		return active_regions[region_pos]
+
+	# Create new region
+	var region := ChunkRegion.new(region_pos)
+	region.material = mesh_builder.default_material if mesh_builder else null
+	region.position = region.get_region_world_position()
+	add_child(region)
+
+	active_regions[region_pos] = region
+
+	print("[ChunkManager] Created region at %s" % region_pos)
+	return region
+
+## Add chunk to its region
+func _add_chunk_to_region(chunk: Chunk) -> void:
+	if not enable_region_batching:
+		return
+
+	var region := _get_or_create_region(chunk.position)
+	region.add_chunk(chunk)
+
+	# Mark region as dirty
+	dirty_regions[region.region_position] = true
+
+## Remove chunk from its region
+func _remove_chunk_from_region(chunk_pos: Vector3i) -> void:
+	if not enable_region_batching:
+		return
+
+	var region_pos := ChunkRegion.chunk_to_region_position(chunk_pos)
+
+	if region_pos in active_regions:
+		var region: ChunkRegion = active_regions[region_pos]
+		region.remove_chunk(chunk_pos)
+
+		# Mark region as dirty
+		dirty_regions[region_pos] = true
+
+		# If region is now empty, remove it
+		if region.chunk_count == 0:
+			active_regions.erase(region_pos)
+			dirty_regions.erase(region_pos)
+			remove_child(region)
+			region.cleanup()
+			print("[ChunkManager] Removed empty region at %s" % region_pos)
+
+## Process dirty regions (rebuild their combined meshes)
+func _process_dirty_regions() -> void:
+	if dirty_regions.is_empty():
+		return
+
+	var regions_rebuilt := 0
+
+	# Process dirty regions (limit per frame to avoid stuttering)
+	var regions_to_clear: Array[Vector3i] = []
+
+	for region_pos in dirty_regions.keys():
+		if regions_rebuilt >= MAX_REGION_REBUILDS_PER_FRAME:
+			break
+
+		if region_pos in active_regions:
+			var region: ChunkRegion = active_regions[region_pos]
+
+			if region.needs_rebuild() and mesh_builder:
+				region.rebuild_combined_mesh(mesh_builder)
+				regions_rebuilt += 1
+
+		regions_to_clear.append(region_pos)
+
+	# Clear processed regions
+	for region_pos in regions_to_clear:
+		dirty_regions.erase(region_pos)
+
+	# if regions_rebuilt > 0:
+	# 	print("[ChunkManager] Rebuilt %d regions" % regions_rebuilt)
