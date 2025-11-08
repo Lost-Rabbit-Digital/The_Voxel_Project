@@ -31,6 +31,7 @@ var mesh_builder: ChunkMeshBuilder
 var tracked_position: Vector3 = Vector3.ZERO
 @export var player_node_path: NodePath
 var player_node: Node3D
+var active_camera: Camera3D  # For frustum culling
 
 ## Debug
 var debug_label: Label
@@ -74,10 +75,21 @@ func _ready() -> void:
 			print("[VoxelWorld] Found player node: %s" % player_node.name)
 			tracked_position = player_node.global_position
 			print("[VoxelWorld] Initial player position: %s" % tracked_position)
+
+			# Check if player node is a camera
+			if player_node is Camera3D:
+				active_camera = player_node
+				print("[VoxelWorld] Player node is camera, using for frustum culling")
 		else:
 			print("[VoxelWorld] WARNING: Player node not found at path!")
 	else:
 		print("[VoxelWorld] No player node path set, using default position")
+
+	# If no camera found yet, try to find one in the scene tree
+	if not active_camera:
+		active_camera = _find_camera()
+		if active_camera:
+			print("[VoxelWorld] Found camera: %s" % active_camera.name)
 
 	if LoadingManager:
 		LoadingManager.complete_task("Player located")
@@ -109,6 +121,10 @@ func _process(delta: float) -> void:
 	# Update chunks based on player position
 	if enable_auto_generation and chunk_manager:
 		chunk_manager.update_chunks(tracked_position)
+
+	# Update frustum culling
+	if active_camera and chunk_manager:
+		chunk_manager.update_frustum_culling(active_camera)
 
 	# Update debug info
 	if show_debug_info:
@@ -284,3 +300,10 @@ func debug_toggle_info() -> void:
 		debug_label.visible = show_debug_info
 	if axis_gizmo:
 		axis_gizmo.visible = show_debug_info
+
+## Find active camera in scene tree
+func _find_camera() -> Camera3D:
+	var viewport := get_viewport()
+	if viewport:
+		return viewport.get_camera_3d()
+	return null

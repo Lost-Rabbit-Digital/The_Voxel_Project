@@ -141,6 +141,12 @@ func distance_squared_to(pos: Vector3) -> float:
 	var chunk_center := get_world_position() + Vector3.ONE * (VoxelData.CHUNK_SIZE * 0.5)
 	return chunk_center.distance_squared_to(pos)
 
+## Get axis-aligned bounding box for this chunk
+func get_aabb() -> AABB:
+	var world_pos := get_world_position()
+	var size := Vector3.ONE * VoxelData.CHUNK_SIZE
+	return AABB(world_pos, size)
+
 ## Update last access time (for LRU management)
 func update_access_time() -> void:
 	last_access_time = Time.get_ticks_msec()

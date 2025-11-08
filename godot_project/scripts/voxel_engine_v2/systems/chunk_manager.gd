@@ -104,6 +104,60 @@ func update_chunks(player_position: Vector3) -> void:
 		stats_chunks_meshed
 	])
 
+## Update frustum culling for all active chunks
+## Shows/hides chunks based on camera frustum visibility
+func update_frustum_culling(camera: Camera3D) -> void:
+	if not camera:
+		return
+
+	var frustum := camera.get_frustum()
+	var visible_count := 0
+	var hidden_count := 0
+
+	for chunk in active_chunks.values():
+		if not chunk or not chunk.mesh_instance:
+			continue
+
+		# Get chunk AABB
+		var aabb := chunk.get_aabb()
+
+		# Check if AABB intersects frustum
+		var is_visible := _aabb_intersects_frustum(aabb, frustum)
+
+		# Update visibility
+		if chunk.mesh_instance.visible != is_visible:
+			chunk.mesh_instance.visible = is_visible
+
+		if is_visible:
+			visible_count += 1
+		else:
+			hidden_count += 1
+
+	# Optionally log culling stats (can be disabled for performance)
+	# print("[ChunkManager] Frustum culling: %d visible, %d hidden" % [visible_count, hidden_count])
+
+## Check if an AABB intersects with a camera frustum
+func _aabb_intersects_frustum(aabb: AABB, frustum: Array[Plane]) -> bool:
+	# Test AABB against each frustum plane
+	for plane in frustum:
+		# Get the "positive" and "negative" vertices relative to the plane normal
+		var p := aabb.position
+		var s := aabb.size
+
+		# Calculate the p-vertex (furthest point in the direction of the normal)
+		var p_vertex := Vector3(
+			p.x + (s.x if plane.normal.x > 0 else 0),
+			p.y + (s.y if plane.normal.y > 0 else 0),
+			p.z + (s.z if plane.normal.z > 0 else 0)
+		)
+
+		# If the p-vertex is behind the plane, the AABB is completely outside
+		if plane.is_point_over(p_vertex):
+			return false
+
+	# AABB intersects or is inside the frustum
+	return true
+
 ## Calculate which chunks should be loaded based on render distance
 func _calculate_needed_chunks(center_pos: Vector3i, result: Dictionary) -> void:
 	var rd := render_distance
