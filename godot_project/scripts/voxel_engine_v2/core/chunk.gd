@@ -56,6 +56,8 @@ func initialize(chunk_pos: Vector3i) -> void:
 		voxel_data = VoxelData.new(chunk_pos)
 	else:
 		voxel_data.chunk_position = chunk_pos
+		# Update chunk height for adaptive sizing
+		voxel_data.chunk_size_y = ChunkHeightZones.get_chunk_height_for_chunk(chunk_pos)
 		voxel_data.fill(VoxelTypes.Type.AIR)
 
 	# Clear neighbor references

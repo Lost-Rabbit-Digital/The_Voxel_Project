@@ -79,30 +79,37 @@ func _setup_noise_generators() -> void:
 func generate_chunk(chunk_pos: Vector3i) -> VoxelData:
 	print("[TerrainGen] Generating chunk %s..." % chunk_pos)
 	var voxel_data := VoxelData.new(chunk_pos)
-	var chunk_start := chunk_pos * VoxelData.CHUNK_SIZE
+
+	# Calculate chunk world position (handle adaptive Y sizing)
+	var chunk_start_x := chunk_pos.x * VoxelData.CHUNK_SIZE_XZ
+	var chunk_start_y := ChunkHeightZones.chunk_y_to_world_y(chunk_pos.y)
+	var chunk_start_z := chunk_pos.z * VoxelData.CHUNK_SIZE_XZ
+
+	# Get the actual height for this specific chunk
+	var chunk_height := voxel_data.chunk_size_y
 
 	# OPTIMIZATION: Pre-calculate heights using PackedInt32Array instead of Dictionary
 	# Avoids Vector2i allocations and is cache-friendly
 	var column_heights := PackedInt32Array()
-	column_heights.resize(VoxelData.CHUNK_SIZE * VoxelData.CHUNK_SIZE)
+	column_heights.resize(VoxelData.CHUNK_SIZE_XZ * VoxelData.CHUNK_SIZE_XZ)
 
-	for x in range(VoxelData.CHUNK_SIZE):
-		for z in range(VoxelData.CHUNK_SIZE):
-			var world_x := chunk_start.x + x
-			var world_z := chunk_start.z + z
-			var index := x * VoxelData.CHUNK_SIZE + z
+	for x in range(VoxelData.CHUNK_SIZE_XZ):
+		for z in range(VoxelData.CHUNK_SIZE_XZ):
+			var world_x := chunk_start_x + x
+			var world_z := chunk_start_z + z
+			var index := x * VoxelData.CHUNK_SIZE_XZ + z
 			column_heights[index] = get_terrain_height(world_x, world_z)
 
 	# Fill voxels
-	for x in range(VoxelData.CHUNK_SIZE):
-		for z in range(VoxelData.CHUNK_SIZE):
-			var index := x * VoxelData.CHUNK_SIZE + z
+	for x in range(VoxelData.CHUNK_SIZE_XZ):
+		for z in range(VoxelData.CHUNK_SIZE_XZ):
+			var index := x * VoxelData.CHUNK_SIZE_XZ + z
 			var terrain_height: int = column_heights[index]
 
-			for y in range(VoxelData.CHUNK_SIZE):
-				var world_x := chunk_start.x + x
-				var world_y := chunk_start.y + y
-				var world_z := chunk_start.z + z
+			for y in range(chunk_height):
+				var world_x := chunk_start_x + x
+				var world_y := chunk_start_y + y
+				var world_z := chunk_start_z + z
 				var world_pos := Vector3i(world_x, world_y, world_z)
 
 				# Determine voxel type

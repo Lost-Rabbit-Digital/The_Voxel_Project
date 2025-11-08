@@ -301,25 +301,35 @@ func _greedy_mesh_direction(st: SurfaceTool, chunk: Chunk, direction: Vector3i) 
 	var v_axis: int = axes[1]
 	var d_axis: int = axes[2]  # The direction axis
 
+	# Get chunk dimensions (handle adaptive Y sizing)
+	var chunk_size_x := VoxelData.CHUNK_SIZE_XZ
+	var chunk_size_y := chunk.voxel_data.chunk_size_y
+	var chunk_size_z := VoxelData.CHUNK_SIZE_XZ
+
+	var dimensions := [chunk_size_x, chunk_size_y, chunk_size_z]
+	var u_size := dimensions[u_axis]
+	var v_size := dimensions[v_axis]
+	var d_size := dimensions[d_axis]
+
 	# THREAD-SAFE: Allocate mask locally for this direction (reused across slices)
 	# Cannot be a member variable since multiple threads call this simultaneously
 	var mask: Array = []
-	mask.resize(VoxelData.CHUNK_SIZE)
-	for i in range(VoxelData.CHUNK_SIZE):
+	mask.resize(u_size)
+	for i in range(u_size):
 		mask[i] = []
-		mask[i].resize(VoxelData.CHUNK_SIZE)
+		mask[i].resize(v_size)
 
 	# Iterate through each slice perpendicular to the direction
-	for d in range(VoxelData.CHUNK_SIZE):
+	for d in range(d_size):
 		# Clear mask for this slice
-		for i in range(VoxelData.CHUNK_SIZE):
-			for j in range(VoxelData.CHUNK_SIZE):
+		for i in range(u_size):
+			for j in range(v_size):
 				mask[i][j] = null
 
 		# Fill the mask and track if slice has any faces
 		var has_faces := false
-		for u in range(VoxelData.CHUNK_SIZE):
-			for v in range(VoxelData.CHUNK_SIZE):
+		for u in range(u_size):
+			for v in range(v_size):
 				# Build position in 3D space
 				var pos := Vector3i.ZERO
 				pos[u_axis] = u
@@ -338,7 +348,7 @@ func _greedy_mesh_direction(st: SurfaceTool, chunk: Chunk, direction: Vector3i) 
 			continue
 
 		# Greedily merge quads in this slice
-		var result := _merge_quads_in_mask(st, chunk, mask, direction, u_axis, v_axis, d_axis, d)
+		var result := _merge_quads_in_mask(st, chunk, mask, direction, u_axis, v_axis, d_axis, d, u_size, v_size)
 		vertices_added += result.vertices
 		quads_added += result.quads
 
@@ -368,13 +378,13 @@ func _get_axis_permutation(primary_axis: int) -> Array:
 
 ## Greedily merge quads in a 2D mask
 func _merge_quads_in_mask(st: SurfaceTool, chunk: Chunk, mask: Array, direction: Vector3i,
-						  u_axis: int, v_axis: int, d_axis: int, d: int) -> Dictionary:
+						  u_axis: int, v_axis: int, d_axis: int, d: int, u_size: int, v_size: int) -> Dictionary:
 	var vertices_added := 0
 	var quads_added := 0
 
 	# Greedy meshing algorithm
-	for u in range(VoxelData.CHUNK_SIZE):
-		for v in range(VoxelData.CHUNK_SIZE):
+	for u in range(u_size):
+		for v in range(v_size):
 			# Skip empty mask cells
 			var mask_value = mask[u][v]
 			if mask_value == null:
@@ -384,13 +394,13 @@ func _merge_quads_in_mask(st: SurfaceTool, chunk: Chunk, mask: Array, direction:
 
 			# Measure width (in v direction)
 			var width := 1
-			while v + width < VoxelData.CHUNK_SIZE and mask[u][v + width] == voxel_type:
+			while v + width < v_size and mask[u][v + width] == voxel_type:
 				width += 1
 
 			# Measure height (in u direction)
 			var height := 1
 			var done := false
-			while u + height < VoxelData.CHUNK_SIZE and not done:
+			while u + height < u_size and not done:
 				# Check if we can extend the rectangle
 				for k in range(width):
 					if mask[u + height][v + k] != voxel_type:

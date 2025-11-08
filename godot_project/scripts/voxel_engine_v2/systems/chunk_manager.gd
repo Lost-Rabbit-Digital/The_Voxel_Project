@@ -933,10 +933,14 @@ func _generate_test_chunk(chunk: Chunk) -> void:
 	# Create a simple flat terrain for testing
 	var height := 8
 
-	for x in range(VoxelData.CHUNK_SIZE):
-		for z in range(VoxelData.CHUNK_SIZE):
-			for y in range(VoxelData.CHUNK_SIZE):
-				var world_y := chunk.position.y * VoxelData.CHUNK_SIZE + y
+	# Get actual chunk dimensions (handle adaptive Y sizing)
+	var chunk_height := chunk.voxel_data.chunk_size_y
+	var chunk_world_y := ChunkHeightZones.chunk_y_to_world_y(chunk.position.y)
+
+	for x in range(VoxelData.CHUNK_SIZE_XZ):
+		for z in range(VoxelData.CHUNK_SIZE_XZ):
+			for y in range(chunk_height):
+				var world_y := chunk_world_y + y
 
 				if world_y < height - 4:
 					chunk.voxel_data.set_voxel(Vector3i(x, y, z), VoxelTypes.Type.STONE)
