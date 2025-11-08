@@ -31,6 +31,10 @@ var chunk_count: int = 0
 var vertex_count: int = 0
 var last_rebuild_time_ms: float = 0.0
 
+## Cached AABB (to avoid expensive per-frame recalculation)
+var cached_aabb: AABB = AABB()
+var aabb_is_valid: bool = false
+
 ## Initialize region at given position
 func _init(pos: Vector3i = Vector3i.ZERO):
 	region_position = pos
@@ -43,12 +47,14 @@ func add_chunk(chunk: Chunk) -> void:
 
 	chunks[chunk.position] = chunk
 	chunk_count = chunks.size()
+	aabb_is_valid = false  # Invalidate cached AABB
 	mark_dirty()
 
 ## Remove a chunk from this region
 func remove_chunk(chunk_pos: Vector3i) -> void:
 	if chunks.erase(chunk_pos):
 		chunk_count = chunks.size()
+		aabb_is_valid = false  # Invalidate cached AABB
 		mark_dirty()
 
 ## Check if region contains a chunk
@@ -245,11 +251,18 @@ func get_region_world_position() -> Vector3:
 ## Get axis-aligned bounding box for this entire region
 ## CRITICAL: Must account for adaptive chunk heights!
 func get_aabb() -> AABB:
+	# Return cached AABB if valid
+	if aabb_is_valid:
+		return cached_aabb
+
+	# Recompute AABB
 	if chunks.is_empty():
 		# Default fallback for empty regions
 		var world_pos := get_region_world_position()
 		var size := Vector3.ONE * (REGION_SIZE * VoxelData.CHUNK_SIZE_XZ)
-		return AABB(world_pos, size)
+		cached_aabb = AABB(world_pos, size)
+		aabb_is_valid = true
+		return cached_aabb
 
 	# Calculate actual AABB from all chunks in region (accounts for adaptive heights)
 	var min_pos := Vector3(INF, INF, INF)
@@ -270,7 +283,9 @@ func get_aabb() -> AABB:
 			max_pos.z = max(max_pos.z, chunk_max.z)
 
 	var size := max_pos - min_pos
-	return AABB(min_pos, size)
+	cached_aabb = AABB(min_pos, size)
+	aabb_is_valid = true
+	return cached_aabb
 
 ## Convert chunk position to region position
 static func chunk_to_region_position(chunk_pos: Vector3i) -> Vector3i:
