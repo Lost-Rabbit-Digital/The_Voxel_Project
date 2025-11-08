@@ -136,26 +136,81 @@ func _ready() -> void:
 		LoadingManager.complete_task("World ready")
 		LoadingManager.finish_loading()
 
+## Frame timing tracking
+var _frame_times: Array[float] = []
+var _last_perf_log: float = 0.0
+const PERF_LOG_INTERVAL: float = 2.0  # Log every 2 seconds
+
 func _process(delta: float) -> void:
+	var frame_start := Time.get_ticks_usec()
+
 	# Update tracked position
+	var pos_start := Time.get_ticks_usec()
 	if player_node:
 		tracked_position = player_node.global_position
+	var pos_time := (Time.get_ticks_usec() - pos_start) / 1000.0
 
 	# Update chunks based on player position
+	var chunk_update_start := Time.get_ticks_usec()
 	if enable_auto_generation and chunk_manager:
 		# Pass camera for prioritization if available
 		var camera_forward := Vector3.FORWARD
 		if active_camera:
 			camera_forward = -active_camera.global_transform.basis.z
 		chunk_manager.update_chunks(tracked_position, camera_forward)
+	var chunk_update_time := (Time.get_ticks_usec() - chunk_update_start) / 1000.0
 
 	# Update frustum culling
+	var culling_start := Time.get_ticks_usec()
 	if active_camera and chunk_manager:
 		chunk_manager.update_frustum_culling(active_camera)
+	var culling_time := (Time.get_ticks_usec() - culling_start) / 1000.0
 
 	# Update debug info
+	var debug_start := Time.get_ticks_usec()
 	if show_debug_info:
 		_update_debug_info(delta)
+	var debug_time := (Time.get_ticks_usec() - debug_start) / 1000.0
+
+	var frame_total := (Time.get_ticks_usec() - frame_start) / 1000.0
+
+	# Track frame times
+	_frame_times.append(frame_total)
+	if _frame_times.size() > 60:
+		_frame_times.pop_front()
+
+	# Log performance periodically
+	var current_time := Time.get_ticks_msec() / 1000.0
+	if current_time - _last_perf_log >= PERF_LOG_INTERVAL:
+		_last_perf_log = current_time
+		_log_performance_breakdown(delta, pos_time, chunk_update_time, culling_time, debug_time, frame_total)
+
+## Log detailed performance breakdown
+func _log_performance_breakdown(delta: float, pos_time: float, chunk_time: float, culling_time: float, debug_time: float, frame_time: float) -> void:
+	var fps := 1.0 / delta if delta > 0 else 0
+	var avg_frame := 0.0
+	var max_frame := 0.0
+	var min_frame := 999.0
+
+	for t in _frame_times:
+		avg_frame += t
+		max_frame = max(max_frame, t)
+		min_frame = min(min_frame, t)
+	avg_frame /= _frame_times.size() if _frame_times.size() > 0 else 1
+
+	var engine_time := (delta * 1000.0) - frame_time  # Time spent outside our code
+
+	print("========================================")
+	print("[Performance] FPS: %.1f (delta: %.2fms)" % [fps, delta * 1000.0])
+	print("[Performance] Frame times - Avg: %.2fms, Min: %.2fms, Max: %.2fms" % [avg_frame, min_frame, max_frame])
+	print("[Performance] Breakdown:")
+	print("  Position update: %.2fms (%.1f%%)" % [pos_time, (pos_time / (delta * 1000.0)) * 100.0])
+	print("  Chunk update: %.2fms (%.1f%%)" % [chunk_time, (chunk_time / (delta * 1000.0)) * 100.0])
+	print("  Frustum culling: %.2fms (%.1f%%)" % [culling_time, (culling_time / (delta * 1000.0)) * 100.0])
+	print("  Debug UI: %.2fms (%.1f%%)" % [debug_time, (debug_time / (delta * 1000.0)) * 100.0])
+	print("  Our code total: %.2fms (%.1f%%)" % [frame_time, (frame_time / (delta * 1000.0)) * 100.0])
+	print("  Engine/GPU: %.2fms (%.1f%%)" % [engine_time, (engine_time / (delta * 1000.0)) * 100.0])
+	print("========================================")
 
 ## Initialize all voxel systems
 func _initialize_systems() -> void:
